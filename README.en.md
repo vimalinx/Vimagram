@@ -31,7 +31,13 @@ Start the Gateway:
 clawdbot gateway --port 18789 --verbose
 ```
 
-Install + configure the plugin:
+Install + configure the plugin (one-liner after clone):
+
+```bash
+./install.sh
+```
+
+Or install manually:
 
 ```bash
 clawdbot plugins install ./plugin

@@ -31,7 +31,13 @@ node server/server.mjs
 clawdbot gateway --port 18789 --verbose
 ```
 
-安装并配置插件：
+安装并配置插件（已克隆仓库一键安装）：
+
+```bash
+./install.sh
+```
+
+或手动安装并配置插件：
 
 ```bash
 clawdbot plugins install ./plugin
