@@ -150,9 +150,22 @@ print("Configured user:", user_id)
 print("Updated config:", config_path)
 PY
 
+if [[ "${VIMALINX_SKIP_DOCTOR_FIX:-}" != "1" ]]; then
+  clawdbot doctor --fix >/dev/null 2>&1 || true
+fi
+
+if [[ "${VIMALINX_SKIP_GATEWAY_START:-}" != "1" ]]; then
+  clawdbot gateway start >/dev/null 2>&1 || true
+fi
+
+if [[ "${VIMALINX_SKIP_STATUS:-}" != "1" ]]; then
+  clawdbot channels status --probe || true
+fi
+
 cat <<'EOF'
 Done.
-Next:
-  1) Run: clawdbot gateway start
-  2) Check status: clawdbot channels status --probe
+If you want to skip auto steps next time:
+  - VIMALINX_SKIP_DOCTOR_FIX=1
+  - VIMALINX_SKIP_GATEWAY_START=1
+  - VIMALINX_SKIP_STATUS=1
 EOF

@@ -38,6 +38,8 @@ clawdbot gateway --port 18789 --verbose
 ```
 
 脚本会提示输入 Server URL 与 Token，并自动写入配置（无需再跑 onboard）。
+默认会执行：doctor --fix、gateway start、channels status --probe。
+如需跳过，可设置：VIMALINX_SKIP_DOCTOR_FIX=1 / VIMALINX_SKIP_GATEWAY_START=1 / VIMALINX_SKIP_STATUS=1。
 如需覆盖已安装插件，可设置：`VIMALINX_FORCE_OVERWRITE=1 ./install.sh`。
 
 或手动安装并配置插件：

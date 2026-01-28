@@ -38,6 +38,8 @@ Install + configure the plugin (one-liner after clone):
 ```
 
 The script prompts for Server URL + token and writes the config (no onboard needed).
+By default it runs: doctor --fix, gateway start, channels status --probe.
+Skip with: VIMALINX_SKIP_DOCTOR_FIX=1 / VIMALINX_SKIP_GATEWAY_START=1 / VIMALINX_SKIP_STATUS=1.
 To overwrite an existing install: `VIMALINX_FORCE_OVERWRITE=1 ./install.sh`.
 
 Or install manually:
