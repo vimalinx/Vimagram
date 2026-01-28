@@ -435,6 +435,9 @@ private fun ChatListScreen(
     bottomBar = {
       AppBottomNav(currentTab = currentTab, onTabSelected = onTabSelected)
     },
+    bottomBar = {
+      AppBottomNav(currentTab = currentTab, onTabSelected = onTabSelected)
+    },
     containerColor = MaterialTheme.colorScheme.background,
   ) { padding ->
     Column(
