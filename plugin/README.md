@@ -11,7 +11,13 @@
 
 ## 安装
 
-从本地仓库安装：
+从 npm 安装（推荐发布给客户）：
+
+```bash
+clawdbot plugins install vimalinx-server-plugin
+```
+
+从本地仓库安装（开发/调试）：
 
 ```bash
 clawdbot plugins install ./plugin

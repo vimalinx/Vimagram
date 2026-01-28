@@ -12,7 +12,13 @@ webhook inbound modes and token-based auth.
 
 ## Install
 
-From a local checkout:
+From npm (recommended for releases):
+
+```bash
+clawdbot plugins install vimalinx-server-plugin
+```
+
+From a local checkout (dev/debug):
 
 ```bash
 clawdbot plugins install ./plugin

@@ -20,7 +20,7 @@
     "install": {
       "npmSpec": "vimalinx-server-plugin",
       "localPath": ".",
-      "defaultChoice": "local"
+      "defaultChoice": "npm"
     }
   }
 }
