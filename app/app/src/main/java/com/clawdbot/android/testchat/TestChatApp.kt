@@ -120,36 +120,37 @@ fun TestChatApp(viewModel: TestChatViewModel) {
         },
         onLogin = viewModel::loginAccount,
       )
+    } else if (state.activeChatId != null) {
+      ChatScreen(
+        state = state,
+        onBack = viewModel::backToList,
+        onSend = viewModel::sendMessage,
+        onLogout = viewModel::logout,
+      )
     } else {
-      when (currentTab) {
-        MainTab.Account -> {
-          AccountDashboardScreen(
-            state = state,
-            currentTab = currentTab,
-            onTabSelected = { currentTab = it },
-            onLogout = viewModel::logout,
-          )
-        }
-        MainTab.Chat -> {
-          if (state.activeChatId == null) {
-            ChatListScreen(
-              state = state,
-              currentTab = currentTab,
-              onTabSelected = { currentTab = it },
-              onOpenChat = viewModel::openChat,
-              onNewChat = viewModel::createThread,
-              onGenerateHost = viewModel::generateHostToken,
-              onLogout = viewModel::logout,
-            )
-          } else {
-            ChatScreen(
-              state = state,
-              currentTab = currentTab,
-              onTabSelected = { currentTab = it },
-              onBack = viewModel::backToList,
-              onSend = viewModel::sendMessage,
-              onLogout = viewModel::logout,
-            )
+      Scaffold(
+        bottomBar = {
+          AppBottomNav(currentTab = currentTab, onTabSelected = { currentTab = it })
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+      ) { padding ->
+        Box(modifier = Modifier.padding(padding)) {
+          when (currentTab) {
+            MainTab.Account -> {
+              AccountDashboardScreen(
+                state = state,
+                onLogout = viewModel::logout,
+              )
+            }
+            MainTab.Chat -> {
+              ChatListScreen(
+                state = state,
+                onOpenChat = viewModel::openChat,
+                onNewChat = viewModel::createThread,
+                onGenerateHost = viewModel::generateHostToken,
+                onLogout = viewModel::logout,
+              )
+            }
           }
         }
       }
@@ -383,8 +384,6 @@ private fun AccountScreen(
 @Composable
 private fun ChatListScreen(
   state: TestChatUiState,
-  currentTab: MainTab,
-  onTabSelected: (MainTab) -> Unit,
   onOpenChat: (String) -> Unit,
   onNewChat: (String, String, String) -> Unit,
   onGenerateHost: (String, (String, String) -> Unit) -> Unit,
@@ -431,9 +430,6 @@ private fun ChatListScreen(
           Icon(imageVector = Icons.Default.Add, contentDescription = "New chat")
         }
       }
-    },
-    bottomBar = {
-      AppBottomNav(currentTab = currentTab, onTabSelected = onTabSelected)
     },
     containerColor = MaterialTheme.colorScheme.background,
   ) { padding ->
@@ -616,8 +612,6 @@ private fun ChatListScreen(
 @Composable
 private fun ChatScreen(
   state: TestChatUiState,
-  currentTab: MainTab,
-  onTabSelected: (MainTab) -> Unit,
   onBack: () -> Unit,
   onSend: (String) -> Unit,
   onLogout: () -> Unit,
@@ -719,8 +713,6 @@ private fun ChatScreen(
 @Composable
 private fun AccountDashboardScreen(
   state: TestChatUiState,
-  currentTab: MainTab,
-  onTabSelected: (MainTab) -> Unit,
   onLogout: () -> Unit,
 ) {
   val account = state.account
