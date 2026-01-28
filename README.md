@@ -1,5 +1,7 @@
 # 🦞 Clawdbot — Personal AI Assistant
 
+English | [中文](README.zh.md)
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/clawdbot/clawdbot/main/docs/whatsapp-clawd.jpg" alt="Clawdbot" width="400">
 </p>
