@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vimagram</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Satoshi", "Manrope", "Noto Sans SC", "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+        background: #eef2f7;
+        color: #0f172a;
+        --accent: #2aabee;
+        --accent-dark: #1b8ec5;
+        --ink: #0f172a;
+        --muted: #64748b;
+        --panel: #ffffff;
+        --panel-weak: #f6f8fb;
+        --stroke: #e2e8f0;
+        --shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(circle at top left, #e4f3ff 0%, #f6f8fc 45%, #eef2f7 100%);
+        display: flex;
+        justify-content: center;
+        padding: 24px;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: -20%;
+        background: radial-gradient(circle at 20% 20%, rgba(42, 171, 238, 0.15), transparent 60%),
+          radial-gradient(circle at 80% 10%, rgba(14, 165, 233, 0.12), transparent 55%);
+        z-index: 0;
+      }
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: repeating-linear-gradient(
+          135deg,
+          rgba(255, 255, 255, 0.12) 0 6px,
+          rgba(255, 255, 255, 0) 6px 12px
+        );
+        opacity: 0.35;
+        z-index: 0;
+      }
+      .shell {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 280px minmax(0, 760px);
+        width: min(1100px, 100%);
+        min-height: 620px;
+        border-radius: 22px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.6);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(12px);
+        animation: rise 0.6s ease;
+      }
+      body.connected {
+        padding: 0;
+      }
+      body.connected .shell {
+        width: 100%;
+        min-height: 100vh;
+        border-radius: 0;
+        grid-template-columns: 1fr;
+      }
+      body.connected aside {
+        display: none;
+      }
+      @keyframes rise {
+        from {
+          transform: translateY(18px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      aside {
+        background: linear-gradient(180deg, #f8fbff 0%, #f4f8fd 100%);
+        padding: 20px;
+        border-right: 1px solid rgba(226, 232, 240, 0.8);
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .logo {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, var(--accent) 0%, #58c7ff 100%);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 18px;
+        box-shadow: 0 12px 24px rgba(42, 171, 238, 0.35);
+      }
+      .brand-title {
+        font-weight: 700;
+        font-size: 18px;
+      }
+      .brand-sub {
+        font-size: 12px;
+        color: var(--muted);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .status {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: fit-content;
+        background: #f1f5f9;
+        color: var(--muted);
+      }
+      .status[data-state="connected"] {
+        background: #dcfce7;
+        color: #166534;
+        border-color: #86efac;
+      }
+      .status[data-state="connecting"] {
+        background: #fef9c3;
+        color: #854d0e;
+        border-color: #fde68a;
+      }
+      .status[data-state="disconnected"] {
+        background: #fee2e2;
+        color: #991b1b;
+        border-color: #fecaca;
+      }
+      .connect-card {
+        background: var(--panel);
+        border: 1px solid var(--stroke);
+        border-radius: 16px;
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+      .connect-card input {
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--stroke);
+        background: #f8fafc;
+        font-size: 14px;
+      }
+      .connect-card button {
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 10px 18px rgba(42, 171, 238, 0.3);
+      }
+      .register-card {
+        background: var(--panel);
+        border: 1px dashed var(--stroke);
+        border-radius: 16px;
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+      .config-card {
+        background: var(--panel);
+        border: 1px solid var(--stroke);
+        border-radius: 16px;
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+      }
+      .config-snippet {
+        margin: 0;
+        padding: 12px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid var(--stroke);
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      .config-card button {
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: none;
+        background: #1f2937;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .register-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--muted);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .register-card input {
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--stroke);
+        background: #f8fafc;
+        font-size: 14px;
+      }
+      .register-card button {
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: none;
+        background: #0f172a;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .register-hint {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .connect-card button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 24px rgba(42, 171, 238, 0.35);
+      }
+      .chat-list {
+        display: grid;
+        gap: 10px;
+      }
+      .chat-item {
+        display: grid;
+        grid-template-columns: 42px 1fr;
+        gap: 12px;
+        padding: 12px;
+        border-radius: 14px;
+        background: var(--panel);
+        border: 1px solid var(--stroke);
+        align-items: center;
+        animation: fadeIn 0.6s ease;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .chat-avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: #e2e8f0;
+        color: var(--ink);
+        display: grid;
+        place-items: center;
+        font-weight: 600;
+      }
+      .chat-name {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .chat-last {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      main {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        background: linear-gradient(180deg, #f8fbff 0%, #eef2f7 100%);
+      }
+      .chat-header {
+        padding: 18px 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(10px);
+      }
+      .chat-title {
+        font-weight: 700;
+        font-size: 18px;
+      }
+      .chat-sub {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .chat-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .messages {
+        padding: 20px 24px 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .bubble {
+        max-width: 100%;
+        padding: 10px 14px;
+        border-radius: 16px;
+        font-size: 14px;
+        line-height: 1.5;
+        animation: pop 0.25s ease;
+        word-break: break-word;
+      }
+      .bubble p {
+        margin: 0 0 8px;
+      }
+      .bubble p:last-child {
+        margin-bottom: 0;
+      }
+      .bubble h1,
+      .bubble h2,
+      .bubble h3,
+      .bubble h4,
+      .bubble h5,
+      .bubble h6 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .bubble h1 {
+        font-size: 18px;
+      }
+      .bubble h2 {
+        font-size: 17px;
+      }
+      .bubble ul,
+      .bubble ol {
+        margin: 6px 0 10px 18px;
+        padding: 0;
+      }
+      .bubble li {
+        margin: 4px 0;
+      }
+      .bubble blockquote {
+        margin: 6px 0 10px;
+        padding-left: 12px;
+        border-left: 3px solid rgba(148, 163, 184, 0.6);
+        color: var(--muted);
+      }
+      .bubble a {
+        color: inherit;
+        text-decoration: underline;
+      }
+      .bubble code {
+        font-family: "JetBrains Mono", "Fira Code", "SFMono-Regular", monospace;
+        font-size: 12px;
+        background: rgba(15, 23, 42, 0.08);
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+      .bubble pre {
+        margin: 8px 0 0;
+        background: rgba(15, 23, 42, 0.08);
+        padding: 12px;
+        border-radius: 12px;
+        overflow-x: auto;
+      }
+      .bubble hr {
+        border: none;
+        border-top: 1px solid rgba(148, 163, 184, 0.4);
+        margin: 10px 0;
+      }
+      .bubble pre code {
+        background: transparent;
+        padding: 0;
+        display: block;
+        white-space: pre-wrap;
+      }
+      @keyframes pop {
+        from {
+          transform: translateY(6px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      .bubble.in {
+        align-self: flex-start;
+        background: #ffffff;
+        border: 1px solid rgba(226, 232, 240, 0.9);
+        color: var(--ink);
+      }
+      .bubble.out {
+        align-self: flex-end;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+        color: #fff;
+        box-shadow: 0 10px 20px rgba(42, 171, 238, 0.25);
+      }
+      .composer {
+        padding: 16px 22px 22px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        background: rgba(255, 255, 255, 0.8);
+        border-top: 1px solid rgba(226, 232, 240, 0.6);
+      }
+      .composer input {
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--stroke);
+        font-size: 14px;
+        background: #fff;
+      }
+      .composer button {
+        padding: 12px 20px;
+        border-radius: 14px;
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 10px 18px rgba(42, 171, 238, 0.28);
+      }
+      .composer button:active {
+        transform: translateY(1px);
+      }
+      @media (max-width: 900px) {
+        body {
+          padding: 12px;
+        }
+        body.connected {
+          padding: 0;
+        }
+        .shell {
+          grid-template-columns: 1fr;
+          min-height: unset;
+        }
+        aside {
+          border-right: none;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        .messages {
+          min-height: 320px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside>
+        <div class="brand">
+          <div class="logo">T</div>
+          <div>
+            <div class="brand-title">Vimagram</div>
+            <div class="brand-sub">Bridge Client</div>
+          </div>
+        </div>
+
+        <div class="status" id="status" data-state="disconnected">Disconnected</div>
+
+        <div class="register-card">
+          <div class="register-title">Register</div>
+          <input id="registerUserId" placeholder="New user id (optional)" />
+          <input id="registerName" placeholder="Display name (optional)" />
+          <input id="registerPassword" placeholder="Password (6-64 chars)" type="password" />
+          <button id="register">Create account</button>
+          <div class="register-hint" id="registerHint">No account yet? Register here.</div>
+        </div>
+
+        <div class="connect-card">
+          <input id="userId" placeholder="User ID" />
+          <input id="token" placeholder="Password" type="password" />
+          <button id="connect">Connect</button>
+        </div>
+
+        <div class="config-card">
+          <div class="register-title">Local Config</div>
+          <pre class="config-snippet" id="configSnippet">Connect or register to view config.</pre>
+          <button id="copyConfig">Copy config</button>
+          <div class="register-hint" id="configHint">Paste into ~/.clawdbot/clawdbot.json</div>
+        </div>
+
+        <div class="chat-list">
+          <div class="chat-item">
+            <div class="chat-avatar" id="chatAvatar">U</div>
+            <div>
+              <div class="chat-name" id="activeUserName">No session</div>
+              <div class="chat-last" id="lastMessage">Waiting for messages...</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <div class="chat-header">
+          <div class="chat-info">
+            <div class="chat-title" id="headerUserName">Vimalinx Server</div>
+            <div class="chat-sub" id="headerUserMeta">Connect to start chatting.</div>
+          </div>
+          <div class="status" id="statusBadge" data-state="disconnected">Disconnected</div>
+        </div>
+
+        <section class="messages" id="messages"></section>
+
+        <section class="composer">
+          <input id="text" placeholder="Type a message..." />
+          <button id="send">Send</button>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const statusBadgeEl = document.getElementById("statusBadge");
+      const messagesEl = document.getElementById("messages");
+      const userIdEl = document.getElementById("userId");
+      const tokenEl = document.getElementById("token");
+      const textEl = document.getElementById("text");
+      const connectBtn = document.getElementById("connect");
+      const sendBtn = document.getElementById("send");
+      const registerBtn = document.getElementById("register");
+      const registerUserIdEl = document.getElementById("registerUserId");
+      const registerNameEl = document.getElementById("registerName");
+      const registerPasswordEl = document.getElementById("registerPassword");
+      const registerHintEl = document.getElementById("registerHint");
+      const configSnippetEl = document.getElementById("configSnippet");
+      const copyConfigBtn = document.getElementById("copyConfig");
+      const configHintEl = document.getElementById("configHint");
+      const lastMessageEl = document.getElementById("lastMessage");
+      const activeUserNameEl = document.getElementById("activeUserName");
+      const headerUserNameEl = document.getElementById("headerUserName");
+      const headerUserMetaEl = document.getElementById("headerUserMeta");
+      const chatAvatarEl = document.getElementById("chatAvatar");
+
+      let stream = null;
+
+      function setStatus(text, state) {
+        statusEl.textContent = text;
+        statusBadgeEl.textContent = text;
+        statusEl.dataset.state = state;
+        statusBadgeEl.dataset.state = state;
+        document.body.classList.toggle("connected", state === "connected");
+      }
+
+      function setActiveUser(userId) {
+        if (!userId) {
+          activeUserNameEl.textContent = "No session";
+          headerUserNameEl.textContent = "Vimalinx Server";
+          headerUserMetaEl.textContent = "Connect to start chatting.";
+          chatAvatarEl.textContent = "U";
+          return;
+        }
+        activeUserNameEl.textContent = userId;
+        headerUserNameEl.textContent = userId;
+        headerUserMetaEl.textContent = "Polling inbound messages";
+        chatAvatarEl.textContent = userId.slice(0, 1).toUpperCase();
+      }
+
+      function updateLastMessage(text) {
+        if (!text) return;
+        const trimmed = text.trim();
+        lastMessageEl.textContent = trimmed.length > 48 ? `${trimmed.slice(0, 48)}...` : trimmed;
+      }
+
+      function escapeHtml(input) {
+        return input
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function renderInline(text) {
+        let output = text;
+        output = output.replace(
+          /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+          '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+        );
+        output = output.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+        output = output.replace(/`([^`]+)`/g, "<code>$1</code>");
+        output = output.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+        output = output.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+        output = output.replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
+        output = output.replace(/(^|[^_])_([^_]+)_/g, "$1<em>$2</em>");
+        return output.replace(/\n/g, "<br>");
+      }
+
+      function renderMarkdown(raw) {
+        const safe = escapeHtml(raw);
+        const codeBlocks = [];
+        const text = safe.replace(/```([\s\S]*?)```/g, (_match, code) => {
+          const index = codeBlocks.length;
+          codeBlocks.push(String(code ?? ""));
+          return `\n@@CODEBLOCK${index}@@\n`;
+        });
+
+        const lines = text.split(/\r?\n/);
+        const out = [];
+        let i = 0;
+
+        function renderCodeBlock(block) {
+          const trimmed = block.replace(/\n$/, "");
+          const rows = trimmed.split(/\r?\n/);
+          let language = "";
+          let content = rows;
+          const first = rows[0]?.trim() ?? "";
+          if (rows.length > 1 && /^[a-z0-9+-]+$/i.test(first)) {
+            language = first;
+            content = rows.slice(1);
+          }
+          const attr = language ? ` data-lang="${language}"` : "";
+          return `<pre><code${attr}>${content.join("\n")}</code></pre>`;
+        }
+
+        while (i < lines.length) {
+          const line = lines[i];
+          const trimmed = line.trim();
+          if (!trimmed) {
+            i += 1;
+            continue;
+          }
+
+          const codeMatch = trimmed.match(/^@@CODEBLOCK(\d+)@@$/);
+          if (codeMatch) {
+            const index = Number.parseInt(codeMatch[1], 10);
+            out.push(renderCodeBlock(codeBlocks[index] ?? ""));
+            i += 1;
+            continue;
+          }
+
+          if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+            out.push("<hr>");
+            i += 1;
+            continue;
+          }
+
+          const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+          if (headingMatch) {
+            const level = headingMatch[1].length;
+            out.push(`<h${level}>${renderInline(headingMatch[2])}</h${level}>`);
+            i += 1;
+            continue;
+          }
+
+          if (trimmed.startsWith(">")) {
+            const quoteLines = [];
+            while (i < lines.length && lines[i].trim().startsWith(">")) {
+              quoteLines.push(lines[i].replace(/^\s*> ?/, ""));
+              i += 1;
+            }
+            out.push(`<blockquote>${renderInline(quoteLines.join("\n"))}</blockquote>`);
+            continue;
+          }
+
+          if (/^[-*+]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
+            const ordered = /^\d+\.\s+/.test(trimmed);
+            const items = [];
+            while (i < lines.length) {
+              const current = lines[i];
+              const match = ordered
+                ? current.match(/^\s*\d+\.\s+(.*)$/)
+                : current.match(/^\s*[-*+]\s+(.*)$/);
+              if (!match) break;
+              items.push(`<li>${renderInline(match[1])}</li>`);
+              i += 1;
+            }
+            out.push(ordered ? `<ol>${items.join("")}</ol>` : `<ul>${items.join("")}</ul>`);
+            continue;
+          }
+
+          const paragraph = [];
+          while (i < lines.length) {
+            const current = lines[i];
+            const currentTrimmed = current.trim();
+            if (!currentTrimmed) break;
+            if (/^@@CODEBLOCK\d+@@$/.test(currentTrimmed)) break;
+            if (/^(#{1,6})\s+/.test(currentTrimmed)) break;
+            if (currentTrimmed.startsWith(">")) break;
+            if (/^[-*+]\s+/.test(currentTrimmed)) break;
+            if (/^\d+\.\s+/.test(currentTrimmed)) break;
+            if (/^(-{3,}|\*{3,}|_{3,})$/.test(currentTrimmed)) break;
+            paragraph.push(current);
+            i += 1;
+          }
+          out.push(`<p>${renderInline(paragraph.join("\n"))}</p>`);
+        }
+
+        return out.join("");
+      }
+
+      function appendMessage(text, role) {
+        const bubble = document.createElement("div");
+        bubble.className = `bubble ${role}`;
+        bubble.innerHTML = renderMarkdown(text);
+        messagesEl.appendChild(bubble);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        updateLastMessage(text);
+      }
+
+      function updateConfigSnippet() {
+        const userId = userIdEl.value.trim();
+        const token = tokenEl.value.trim();
+        if (!userId || !token) {
+          configSnippetEl.textContent = "Connect or register to view config.";
+          return;
+        }
+        const baseUrl = window.location.origin;
+        configSnippetEl.textContent = `channels: {\n  test: {\n    enabled: true,\n    baseUrl: \"${baseUrl}\",\n    token: \"${token}\",\n    userId: \"${userId}\",\n    inboundMode: \"poll\",\n    dmPolicy: \"open\",\n    allowFrom: [\"*\"]\n  }\n}`;
+      }
+
+      function connect() {
+        const userId = userIdEl.value.trim().toLowerCase();
+        const token = tokenEl.value.trim();
+        if (!userId || !token) {
+          setStatus("Missing credentials", "disconnected");
+          return;
+        }
+        setStatus("Connecting...", "connecting");
+        setActiveUser(userId);
+        if (stream) stream.close();
+        const url = `/api/stream?userId=${encodeURIComponent(userId)}&token=${encodeURIComponent(token)}`;
+        stream = new EventSource(url);
+        stream.onopen = () => setStatus("Connected", "connected");
+        stream.onerror = () => setStatus("Disconnected", "disconnected");
+        stream.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            if (payload.text) {
+              appendMessage(payload.text, "in");
+            }
+          } catch {
+            appendMessage(event.data, "in");
+          }
+        };
+        localStorage.setItem("test_user_id", userId);
+        localStorage.setItem("test_user_token", token);
+        updateConfigSnippet();
+      }
+
+      async function sendMessage() {
+        const userId = userIdEl.value.trim();
+        const token = tokenEl.value.trim();
+        const text = textEl.value.trim();
+        if (!userId || !token || !text) return;
+        appendMessage(text, "out");
+        textEl.value = "";
+        await fetch("/api/message", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, token, text }),
+        });
+      }
+
+      async function registerUser() {
+        const userId = registerUserIdEl.value.trim().toLowerCase();
+        const displayName = registerNameEl.value.trim();
+        const password = registerPasswordEl.value.trim();
+        if (!password) {
+          registerHintEl.textContent = "Password required";
+          return;
+        }
+        registerHintEl.textContent = "Registering...";
+        registerBtn.disabled = true;
+        try {
+          const response = await fetch("/api/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: userId || undefined,
+              displayName: displayName || undefined,
+              password,
+            }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.userId || !data.token) {
+            registerHintEl.textContent = data.error || "Registration failed";
+            return;
+          }
+          userIdEl.value = data.userId;
+          tokenEl.value = data.token;
+          registerHintEl.textContent = "Registered. Connecting...";
+          registerPasswordEl.value = "";
+          connect();
+        } catch (err) {
+          registerHintEl.textContent = "Registration failed";
+        } finally {
+          registerBtn.disabled = false;
+        }
+      }
+
+      function restoreSavedCredentials() {
+        const savedId = localStorage.getItem("test_user_id");
+        const savedToken = localStorage.getItem("test_user_token");
+        if (savedId) userIdEl.value = savedId;
+        if (savedToken) tokenEl.value = savedToken;
+        updateConfigSnippet();
+      }
+
+      connectBtn.addEventListener("click", connect);
+      sendBtn.addEventListener("click", sendMessage);
+      registerBtn.addEventListener("click", registerUser);
+      copyConfigBtn.addEventListener("click", async () => {
+        const text = configSnippetEl.textContent;
+        if (!text || text.includes("Connect or register")) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          configHintEl.textContent = "Copied!";
+          setTimeout(() => {
+            configHintEl.textContent = "Paste into ~/.clawdbot/clawdbot.json";
+          }, 1500);
+        } catch {
+          configHintEl.textContent = "Copy failed";
+        }
+      });
+      textEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") sendMessage();
+      });
+
+      restoreSavedCredentials();
+    </script>
+  </body>
+</html>

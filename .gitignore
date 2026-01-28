@@ -1,0 +1,16 @@
+node_modules/
+.DS_Store
+.env
+.env.*
+*.log
+
+# Server
+/server/users.json
+/server/server.log
+
+# Android
+/app/.gradle/
+/app/local.properties
+/app/**/build/
+/app/**/.idea/
+/app/**/*.iml

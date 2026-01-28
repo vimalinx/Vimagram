@@ -1,0 +1,26 @@
+{
+  "name": "vimalinx-server-plugin",
+  "version": "2026.1.24",
+  "type": "module",
+  "description": "Vimalinx Server channel plugin for Clawdbot",
+  "clawdbot": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "test",
+      "label": "Vimalinx Server",
+      "selectionLabel": "Vimalinx Server (local server)",
+      "detailLabel": "Vimalinx Server",
+      "docsPath": "/channels",
+      "docsLabel": "channels",
+      "blurb": "custom webhook + outbound API",
+      "order": 90
+    },
+    "install": {
+      "npmSpec": "vimalinx-server-plugin",
+      "localPath": ".",
+      "defaultChoice": "local"
+    }
+  }
+}
