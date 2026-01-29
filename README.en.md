@@ -52,6 +52,9 @@ Optional: overwrite existing install
 VIMALINX_FORCE_OVERWRITE=1 ./install.sh
 ```
 
+Troubleshooting:
+- `curl: (35) TLS connect error`: install system CA certificates and retry (e.g. Debian/Ubuntu/Kali: `sudo apt-get install -y ca-certificates`).
+
 ## Run your own server (Optional)
 
 Prereqs: Node 22+ and the CLI.

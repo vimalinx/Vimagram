@@ -23,6 +23,37 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ -f "${CONFIG_PATH}" ]]; then
+  python3 - "${CONFIG_PATH}" <<'PY'
+import json
+import os
+import sys
+
+config_path = sys.argv[1]
+
+try:
+  with open(config_path, "r", encoding="utf-8") as f:
+    config = json.load(f)
+except Exception:
+  raise SystemExit(0)
+
+plugins = config.get("plugins")
+if not isinstance(plugins, dict):
+  plugins = {}
+entries = plugins.get("entries")
+if not isinstance(entries, dict):
+  entries = {}
+
+if "vimalinx-server-plugin" in entries:
+  entries.pop("vimalinx-server-plugin", None)
+  plugins["entries"] = entries
+  config["plugins"] = plugins
+  with open(config_path, "w", encoding="utf-8") as f:
+    json.dump(config, f, indent=2, ensure_ascii=True)
+    f.write("\n")
+PY
+fi
+
 echo "Installing Vimalinx Server plugin to: ${TARGET_DIR}"
 if [[ -d "${TARGET_DIR}" ]]; then
   if [[ "${TARGET_DIR}" == "${HOME}/.clawdbot/extensions/vimalinx-server-plugin" || "${VIMALINX_FORCE_OVERWRITE:-}" == "1" ]]; then
@@ -67,9 +98,14 @@ if [[ "${INBOUND_MODE}" != "poll" && "${INBOUND_MODE}" != "webhook" ]]; then
   exit 1
 fi
 
-login_response="$(curl -sS -X POST "${SERVER_URL}/api/login" \
+if ! login_response="$(curl --http1.1 -sS --retry 2 --retry-all-errors \
+  --connect-timeout 10 --max-time 20 \
+  -X POST "${SERVER_URL}/api/login" \
   -H "Content-Type: application/json" \
-  -d "{\"token\":\"${TOKEN}\"}")"
+  -d "{\"token\":\"${TOKEN}\"}")"; then
+  echo "Login request failed. Check server URL/TLS and retry." >&2
+  exit 1
+fi
 
 python3 - "$CONFIG_PATH" "$SERVER_URL" "$INBOUND_MODE" "$login_response" <<'PY'
 import json

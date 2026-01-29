@@ -52,6 +52,9 @@ VIMALINX_SKIP_STATUS=1 \
 VIMALINX_FORCE_OVERWRITE=1 ./install.sh
 ```
 
+常见问题：
+- `curl: (35) TLS connect error`：先安装系统 CA 证书后重试（如 Debian/Ubuntu/Kali：`sudo apt-get install -y ca-certificates`）。
+
 ## 自建服务器（可选）
 
 准备：安装 Node 22+，并全局安装 CLI。
