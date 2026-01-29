@@ -35,7 +35,7 @@ Minimal config (single account):
 
 ```yaml
 channels:
-  test:
+  vimalinx:
     baseUrl: http://server-host:8788
     userId: user-id
     token: host-token
@@ -43,7 +43,7 @@ channels:
 ```
 
 Optional fields:
-- `webhookPath` (default `/test-webhook`)
+- `webhookPath` (default `/vimalinx-webhook`)
 - `webhookToken` (defaults to `token`)
 
 ## Verify

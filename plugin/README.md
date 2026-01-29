@@ -34,7 +34,7 @@ clawdbot onboard
 
 ```yaml
 channels:
-  test:
+  vimalinx:
     baseUrl: http://server-host:8788
     userId: user-id
     token: host-token
@@ -42,7 +42,7 @@ channels:
 ```
 
 可选字段：
-- `webhookPath`（默认 `/test-webhook`）
+- `webhookPath`（默认 `/vimalinx-webhook`）
 - `webhookToken`（默认等于 `token`）
 
 ## 验证
