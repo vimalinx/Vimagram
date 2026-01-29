@@ -120,7 +120,7 @@ channels = config.get("channels")
 if not isinstance(channels, dict):
   channels = {}
 
-test_cfg = channels.get("test")
+test_cfg = channels.get("vimalinx")
 if not isinstance(test_cfg, dict):
   test_cfg = {}
 
@@ -134,7 +134,7 @@ test_cfg.update({
   "allowFrom": ["*"],
 })
 
-channels["test"] = test_cfg
+channels["vimalinx"] = test_cfg
 config["channels"] = channels
 
 plugins = config.get("plugins")
