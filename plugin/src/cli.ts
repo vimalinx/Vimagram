@@ -23,17 +23,17 @@ function resolveAllowFrom(existing: unknown): Array<string | number> {
   return ["*"];
 }
 
-export function registerTestCli(params: {
+export function registerVimalinxCli(params: {
   program: Command;
   runtime: PluginRuntime;
   logger: Logger;
 }) {
   const { program, runtime, logger } = params;
-  const root = program.command("test").description("Vimalinx Server channel utilities");
+  const root = program.command("vimalinx").description("Vimalinx Server channel utilities");
 
   root
     .command("register")
-    .description("Register a test user and update local config")
+    .description("Register a Vimalinx user and update local config")
     .requiredOption("--server <url>", "Server base URL, e.g. http://1.2.3.4:8788")
     .requiredOption("--password <password>", "Account password (6-64 chars)")
     .option("--user <id>", "User id (optional)")
@@ -80,9 +80,9 @@ export function registerTestCli(params: {
 
         const cfg = runtime.config.loadConfig() as ClawdbotConfig;
         const channels = (cfg.channels ?? {}) as Record<string, unknown>;
-        const existing = (channels.test ?? {}) as TestAccountConfig;
+        const existing = (channels.vimalinx ?? {}) as TestAccountConfig;
 
-        const nextTest = {
+        const nextVimalinx = {
           ...existing,
           enabled: true,
           baseUrl: serverUrl,
@@ -99,7 +99,7 @@ export function registerTestCli(params: {
 
         await runtime.config.writeConfigFile({
           ...cfg,
-          channels: { ...channels, test: nextTest },
+          channels: { ...channels, vimalinx: nextVimalinx },
           plugins: {
             ...plugins,
             entries: {
