@@ -91,15 +91,26 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
       UiStateParts(auth, connectionState, errorText, snapshot, activeChatId)
     }
 
-  val uiState: StateFlow<TestChatUiState> =
+  private val uiStateExtras =
     combine(
       baseUiState,
       _tokenUsage,
       _inviteRequired,
       _serverTestMessage,
       _serverTestSuccess,
-      _serverTestInProgress,
-    ) { base, tokenUsage, inviteRequired, serverTestMessage, serverTestSuccess, serverTestInProgress ->
+    ) { base, tokenUsage, inviteRequired, serverTestMessage, serverTestSuccess ->
+      UiStateExtras(
+        base = base,
+        tokenUsage = tokenUsage,
+        inviteRequired = inviteRequired,
+        serverTestMessage = serverTestMessage,
+        serverTestSuccess = serverTestSuccess,
+      )
+    }
+
+  val uiState: StateFlow<TestChatUiState> =
+    combine(uiStateExtras, _serverTestInProgress) { extras, serverTestInProgress ->
+      val base = extras.base
       val (account, hosts, password) = base.auth
       val sortedThreads =
         base.snapshot.threads.sortedByDescending { thread -> thread.lastTimestampMs }
@@ -114,14 +125,14 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
       TestChatUiState(
         account = account,
         hosts = hosts,
-        tokenUsage = tokenUsage,
+        tokenUsage = extras.tokenUsage,
         sessionUsage = sessionUsage,
         isAuthenticated = isAuthenticated,
         connectionState = base.connectionState,
         errorText = base.errorText,
-        inviteRequired = inviteRequired,
-        serverTestMessage = serverTestMessage,
-        serverTestSuccess = serverTestSuccess,
+        inviteRequired = extras.inviteRequired,
+        serverTestMessage = extras.serverTestMessage,
+        serverTestSuccess = extras.serverTestSuccess,
         serverTestInProgress = serverTestInProgress,
         threads = sortedThreads,
         activeChatId = base.activeChatId,
@@ -992,6 +1003,14 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     val errorText: String?,
     val snapshot: TestChatSnapshot,
     val activeChatId: String?,
+  )
+
+  private data class UiStateExtras(
+    val base: UiStateParts,
+    val tokenUsage: Map<String, TestChatTokenUsage>,
+    val inviteRequired: Boolean?,
+    val serverTestMessage: String?,
+    val serverTestSuccess: Boolean?,
   )
 
   private data class SessionUsageAccumulator(
