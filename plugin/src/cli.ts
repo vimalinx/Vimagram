@@ -95,7 +95,7 @@ export function registerVimalinxCli(params: {
 
         const plugins = (cfg.plugins ?? {}) as Record<string, unknown>;
         const entries = (plugins.entries ?? {}) as Record<string, unknown>;
-        const currentTest = (entries["vimalinx-server-plugin"] ?? {}) as Record<string, unknown>;
+        const currentTest = (entries["vimalinx"] ?? {}) as Record<string, unknown>;
 
         await runtime.config.writeConfigFile({
           ...cfg,
@@ -104,7 +104,7 @@ export function registerVimalinxCli(params: {
             ...plugins,
             entries: {
               ...entries,
-              "vimalinx-server-plugin": { ...currentTest, enabled: true },
+              vimalinx: { ...currentTest, enabled: true },
             },
           },
         });

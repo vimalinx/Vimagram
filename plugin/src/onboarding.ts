@@ -20,7 +20,7 @@ import {
 import type { TestConfig } from "./types.js";
 
 const channel = "vimalinx" as const;
-const PLUGIN_ID = "vimalinx-server-plugin";
+const PLUGIN_ID = "vimalinx";
 
 function ensurePluginEntry(cfg: ClawdbotConfig): ClawdbotConfig {
   const plugins = (cfg.plugins ?? {}) as Record<string, unknown>;
