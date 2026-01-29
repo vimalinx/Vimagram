@@ -99,6 +99,13 @@ class TestChatPrefs(context: Context) {
     lastEventIds.clear()
   }
 
+  fun clearSession() {
+    prefs.edit {
+      remove(passwordKey)
+    }
+    _password.value = null
+  }
+
   fun saveLanguageTag(tag: String) {
     val normalized = tag.trim().ifBlank { "system" }
     prefs.edit {

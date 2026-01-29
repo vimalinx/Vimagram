@@ -282,10 +282,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   fun logout() {
     stopStreams()
     TestChatForegroundService.stop(getApplication())
-    prefs.clearAll()
-    _account.value = null
+    prefs.clearSession()
     _password.value = null
-    _hosts.value = emptyList()
     _tokenUsage.value = emptyMap()
     _connectionState.value = TestChatConnectionState.Disconnected
     _snapshot.value = TestChatSnapshot()

@@ -46,7 +46,7 @@ class TestChatNotifier(private val app: Application) {
       )
     val notification =
       NotificationCompat.Builder(app, CHANNEL_ID)
-        .setSmallIcon(R.mipmap.ic_launcher)
+        .setSmallIcon(R.drawable.ic_notification)
         .setContentTitle(title)
         .setContentText(text)
         .setStyle(NotificationCompat.BigTextStyle().bigText(text))
