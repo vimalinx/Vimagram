@@ -187,7 +187,7 @@ cd app
 
 **方式二：下载 APK（普通用户）**
 
-联系项目维护者获取 APK 安装包。
+从 GitHub Releases 下载最新 APK（推荐）。
 
 ### 使用 App
 
