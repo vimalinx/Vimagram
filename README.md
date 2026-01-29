@@ -2,7 +2,7 @@
 
 中文 | [English](README.en.md)
 
-Vimalinx Suite 是 Vimalinx Server 通道的全栈实现：
+Vimalinx Suite 是 ClawdBot的国内服务器套件：
 
 **核心组件：**
 - **Server**：聊天服务器，提供用户注册、登录、Token管理、消息收发等功能
@@ -23,7 +23,7 @@ Vimalinx Suite 是 Vimalinx Server 通道的全栈实现：
 ### 前置要求
 
 - 已安装 Node.js 22+
-- 已安装 `clawdbot` CLI（Gateway 工具）
+- 已安装 `clawdbot` 
 - 一台 Android 手机（用于获取 Token）
 
 ### 安装步骤
@@ -31,37 +31,35 @@ Vimalinx Suite 是 Vimalinx Server 通道的全栈实现：
 #### 步骤 1：安装 clawdbot CLI
 
 ```bash
-npm install -g clawdbot@latest
+npm i -g clawdbot
 ```
-
-**clawdbot** 是 Gateway 的命令行工具，用于管理插件、通道配置和消息路由。
 
 #### 步骤 2：配置 clawdbot API
 
 首次使用需要配置 API：
 
 ```bash
-clawdbot config
+clawdbot onboard
 ```
 
-按照提示输入 API 配置信息。**注意**：在配置 channel 时，选择 **skip**（跳过），因为后续会通过 `./install.sh` 自动配置 Vimalinx channel。
+按照提示输入 API 配置信息。**注意**：在配置 channel 时，如果无需telegram等可以选择 **skip**（跳过），因为后续会通过 `./install.sh` 自动配置 Vimalinx channel。
 
 #### 步骤 3：克隆仓库
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/vimalinx/vimalinx-suite-core
 cd vimalinx-suite-core
 ```
 
 #### 步骤 4：在手机上注册并获取 Token
 
 1. 安装 Vimagram App（见下方"Android App 安装"）
-2. 启动 Vimagram，输入服务器地址（例如：`http://123.60.21.129:8788`）
+2. 启动 Vimagram，默认是`http://123.60.21.129:8788`，如果有第三方服务器点击“添加服务器”
 3. 点击 **注册**，填写用户信息
 4. 注册成功后，在 **Account** 页面生成 **主机 Token**
 5. 复制生成的 Token
 
-**注意**：请妥善保存 Token，它将用于插件认证。
+**注意**：请妥善保存 Token，它将用于插件认证；为了安全，所有数据都存在本地，清理缓存时候请小心。
 
 #### 步骤 5：运行安装脚本
 
@@ -87,7 +85,7 @@ cd vimalinx-suite-core
 
 #### 步骤 6：验证安装
 
-安装脚本会自动运行 `clawdbot channels status --probe` 验证连接。如果看到状态显示 **connected/polling**，说明安装成功。
+安装脚本会自动运行 `clawdbot channels status --probe` 验证连接。如果看到状态显示绿色 **connected/polling**，说明安装成功。
 
 如果需要手动验证：
 
@@ -194,10 +192,11 @@ cd app
 1. **启动 App**：打开 Vimagram
 2. **配置服务器**：
    - 输入服务器地址（例如：`http://123.60.21.129:8788`）
-   - 如果使用 HTTPS，请确保服务器证书有效
+   - ~~ 如果使用 HTTPS，请确保服务器证书有效 ~~ 暂未支持
 3. **注册账号**：
    - 填写用户名、密码
    - 如果服务器开启了邀请码模式，需要输入邀请码
+   - 如果没有的话，
 4. **登录**：注册成功后会自动登录，之后可使用账号密码登录
 5. **生成 Token**：
    - 进入 **Account** 页面
@@ -210,10 +209,9 @@ cd app
 
 ### 特性
 
-- 直接连接 Vimalinx Server（不经过 Gateway）
+- 直接连接 Vimalinx Server（无需魔法）
 - 账号页展示已连接主机 Token，方便恢复
 - 支持语言切换（系统/中文/English）
-- 支持私聊消息收发
 
 ---
 
@@ -288,8 +286,6 @@ curl -X POST <SERVER_URL>/api/login \
 **方法一：重新运行安装脚本**
 
 ```bash
-export VIMALINX_SERVER_URL="http://new-server:8788"
-export VIMALINX_TOKEN="new-token"
 ./install.sh
 ```
 
