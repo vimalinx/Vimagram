@@ -184,7 +184,7 @@ fun TestChatApp(viewModel: TestChatViewModel) {
               ChatListScreen(
                 state = state,
                 onOpenChat = viewModel::openChat,
-                onNewChat = viewModel::createThread,
+                onNewChat = viewModel::createThreadAndOpen,
                 onGenerateHost = viewModel::generateHostToken,
                 onRenameThread = viewModel::renameThread,
                 onTogglePinThread = viewModel::togglePinThread,

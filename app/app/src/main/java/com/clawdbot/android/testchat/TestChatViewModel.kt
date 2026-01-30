@@ -621,6 +621,15 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     }
   }
 
+  fun createThreadAndOpen(title: String, hostLabel: String, sessionName: String) {
+    val normalizedHost = normalizeHostLabel(hostLabel)
+    val session = sessionName.trim().ifBlank { "main" }
+    val chatId = "machine:${normalizedHost}/${session}"
+    createThread(title, hostLabel, sessionName)
+    openChat(chatId)
+    sendMessage("/new")
+  }
+
   fun sendMessage(text: String) {
     val account = _account.value ?: return
     val chatId = _activeChatId.value ?: return

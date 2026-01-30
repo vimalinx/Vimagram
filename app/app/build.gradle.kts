@@ -21,8 +21,8 @@ android {
     applicationId = "com.clawdbot.android"
     minSdk = 31
     targetSdk = 36
-    versionCode = 202601240
-    versionName = "2026.1.24"
+    versionCode = 202601300
+    versionName = "2026.1.30"
   }
 
   val releaseStoreFile = project.findProperty("VIMAGRAM_RELEASE_STORE_FILE") as String?
