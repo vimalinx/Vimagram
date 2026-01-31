@@ -1,10 +1,14 @@
 package com.clawdbot.android.testchat
 
 import android.app.Application
+import android.os.Build
 import androidx.annotation.StringRes
-import com.clawdbot.android.R
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.clawdbot.android.BuildConfig
+import com.clawdbot.android.R
+import com.clawdbot.android.UpdateState
+import com.clawdbot.android.UpdateStatus
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Job
@@ -16,8 +20,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.OkHttpClient
-import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
@@ -30,6 +38,10 @@ data class TestChatUiState(
   val isAuthenticated: Boolean = false,
   val connectionState: TestChatConnectionState = TestChatConnectionState.Disconnected,
   val errorText: String? = null,
+  val inviteRequired: Boolean? = null,
+  val serverTestMessage: String? = null,
+  val serverTestSuccess: Boolean? = null,
+  val serverTestInProgress: Boolean = false,
   val threads: List<TestChatThread> = emptyList(),
   val activeChatId: String? = null,
   val messages: List<TestChatMessage> = emptyList(),
@@ -73,12 +85,16 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   private val _activeChatId = MutableStateFlow<String?>(null)
   private val _isInForeground = MutableStateFlow(true)
   private val _tokenUsage = MutableStateFlow<Map<String, TestChatTokenUsage>>(emptyMap())
-  private val _serverConfig = MutableStateFlow(TestServerConfigState())
+  private val _inviteRequired = MutableStateFlow<Boolean?>(null)
   private val _serverTestMessage = MutableStateFlow<String?>(null)
+  private val _serverTestSuccess = MutableStateFlow<Boolean?>(null)
+  private val _serverTestInProgress = MutableStateFlow(false)
+  private val _updateState = MutableStateFlow(UpdateState())
 
   private val hostStates = mutableMapOf<String, TestChatConnectionState>()
   private val hostStreams = mutableMapOf<String, HostStreamState>()
   private var persistJob: Job? = null
+  private val updateClient = OkHttpClient()
 
   private val authState =
     combine(_account, _hosts, _password) { account, hosts, password ->
@@ -96,8 +112,26 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
       UiStateParts(auth, connectionState, errorText, snapshot, activeChatId)
     }
 
+  private val uiStateExtras =
+    combine(
+      baseUiState,
+      _tokenUsage,
+      _inviteRequired,
+      _serverTestMessage,
+      _serverTestSuccess,
+    ) { base, tokenUsage, inviteRequired, serverTestMessage, serverTestSuccess ->
+      UiStateExtras(
+        base = base,
+        tokenUsage = tokenUsage,
+        inviteRequired = inviteRequired,
+        serverTestMessage = serverTestMessage,
+        serverTestSuccess = serverTestSuccess,
+      )
+    }
+
   val uiState: StateFlow<TestChatUiState> =
-    combine(baseUiState, _tokenUsage) { base, tokenUsage ->
+    combine(uiStateExtras, _serverTestInProgress) { extras, serverTestInProgress ->
+      val base = extras.base
       val (account, hosts, password) = base.auth
       val sortedThreads =
         base.snapshot.threads.sortedByDescending { thread -> thread.lastTimestampMs }
@@ -112,16 +146,21 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
       TestChatUiState(
         account = account,
         hosts = hosts,
-        tokenUsage = tokenUsage,
+        tokenUsage = extras.tokenUsage,
         sessionUsage = sessionUsage,
         isAuthenticated = isAuthenticated,
         connectionState = base.connectionState,
         errorText = base.errorText,
+        inviteRequired = extras.inviteRequired,
+        serverTestMessage = extras.serverTestMessage,
+        serverTestSuccess = extras.serverTestSuccess,
+        serverTestInProgress = serverTestInProgress,
         threads = sortedThreads,
         activeChatId = base.activeChatId,
         messages = messages,
       )
     }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, TestChatUiState())
+  val updateState: StateFlow<UpdateState> = _updateState
 
   val languageTag: StateFlow<String> = _languageTag
   val disclaimerAccepted: StateFlow<Boolean> = _disclaimerAccepted
@@ -157,7 +196,12 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     val normalizedUser = userId.trim()
     val normalizedInvite = inviteCode.trim()
     val normalizedPassword = password.trim()
-    if (normalizedUser.isBlank() || normalizedPassword.length < 6) {
+    val inviteRequired = _inviteRequired.value == true
+    if (
+      normalizedUser.isBlank() ||
+        (inviteRequired && normalizedInvite.isBlank()) ||
+        normalizedPassword.length < 6
+    ) {
       _errorText.value = appString(R.string.error_register_required)
       return
     }
@@ -342,10 +386,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   fun logout() {
     stopStreams()
     TestChatForegroundService.stop(getApplication())
-    prefs.clearAll()
-    _account.value = null
+    prefs.clearSession()
     _password.value = null
-    _hosts.value = emptyList()
     _tokenUsage.value = emptyMap()
     _connectionState.value = TestChatConnectionState.Disconnected
     _snapshot.value = TestChatSnapshot()
@@ -366,36 +408,117 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     _disclaimerAccepted.value = true
   }
 
-  fun clearServerTestMessage() {
-    _serverTestMessage.value = null
+  fun checkForUpdates() {
+    val currentVersion = resolvedVersionName()
+    _updateState.value = UpdateState(status = UpdateStatus.Checking, currentVersion = currentVersion)
+
+    viewModelScope.launch {
+      val req =
+        Request.Builder()
+          .url("https://api.github.com/repos/vimalinx/vimalinx-suite-core/releases/latest")
+          .header("User-Agent", buildUserAgent())
+          .build()
+
+      val newState =
+        try {
+          updateClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+              return@use UpdateState(
+                status = UpdateStatus.Error,
+                currentVersion = currentVersion,
+                error = "HTTP ${resp.code}",
+              )
+            }
+
+            val bodyStr = resp.body?.string()?.trim().orEmpty()
+            if (bodyStr.isEmpty()) {
+              return@use UpdateState(status = UpdateStatus.Error, currentVersion = currentVersion, error = "empty body")
+            }
+
+            val root = json.parseToJsonElement(bodyStr).asObjectOrNull() ?: return@use UpdateState(
+              status = UpdateStatus.Error,
+              currentVersion = currentVersion,
+              error = "invalid json",
+            )
+
+            val tagRaw = root["tag_name"].asStringOrNull().orEmpty()
+            val name = root["name"].asStringOrNull().orEmpty()
+            val body = root["body"].asStringOrNull().orEmpty()
+            val htmlUrl = root["html_url"].asStringOrNull().orEmpty()
+
+            val normalizedRemote = normalizeVersion(tagRaw)
+            val normalizedCurrent = normalizeVersion(currentVersion)
+            val newer = isRemoteNewer(normalizedRemote, normalizedCurrent)
+
+            UpdateState(
+              status = UpdateStatus.Ready,
+              currentVersion = currentVersion,
+              latestTag = tagRaw,
+              latestName = name.ifBlank { tagRaw },
+              releaseNotes = body,
+              htmlUrl = htmlUrl,
+              isUpdateAvailable = newer,
+            )
+          }
+        } catch (err: Throwable) {
+          UpdateState(status = UpdateStatus.Error, currentVersion = currentVersion, error = err.message ?: "request failed")
+        }
+
+      _updateState.value = newState
+    }
   }
 
   fun testServerConnection(serverUrl: String) {
     val normalizedServer = client.normalizeBaseUrl(serverUrl)
+    if (normalizedServer.isBlank()) {
+      _serverTestMessage.value = appString(R.string.error_server_url_required)
+      _serverTestSuccess.value = false
+      return
+    }
+    _serverTestInProgress.value = true
     _serverTestMessage.value = null
-    _errorText.value = null
+    _serverTestSuccess.value = null
     viewModelScope.launch {
       val response =
-        runCatching {
-          withTimeout(10_000L) {
-            client.fetchPublicConfig(normalizedServer)
-          }
-        }
+        runCatching { client.checkHealth(normalizedServer) }
           .getOrElse {
-            _errorText.value =
-              if (it is kotlinx.coroutines.TimeoutCancellationException) {
-                appString(R.string.error_server_test_timeout)
-              } else {
-                appString(R.string.error_server_test_failed_detail, it.message ?: "")
-              }
+            _serverTestMessage.value =
+              appString(R.string.msg_server_test_failed_detail, it.message ?: "")
+            _serverTestSuccess.value = false
+            _serverTestInProgress.value = false
             return@launch
           }
       if (response.ok == true) {
-        _serverTestMessage.value = appString(R.string.info_server_test_ok)
+        _serverTestMessage.value = appString(R.string.msg_server_test_success)
+        _serverTestSuccess.value = true
       } else {
-        _errorText.value = response.error ?: appString(R.string.error_server_test_failed)
+        _serverTestMessage.value =
+          response.error ?: appString(R.string.msg_server_test_failed)
+        _serverTestSuccess.value = false
       }
+      _serverTestInProgress.value = false
     }
+  }
+
+  fun fetchServerConfig(serverUrl: String) {
+    val normalizedServer = client.normalizeBaseUrl(serverUrl)
+    if (normalizedServer.isBlank()) {
+      _inviteRequired.value = null
+      return
+    }
+    _inviteRequired.value = null
+    viewModelScope.launch {
+      val response =
+        runCatching { client.fetchServerConfig(normalizedServer) }
+          .getOrNull()
+      _inviteRequired.value = if (response?.ok == true) response.inviteRequired else null
+    }
+  }
+
+  fun clearServerTestStatus() {
+    _serverTestMessage.value = null
+    _serverTestSuccess.value = null
+    _serverTestInProgress.value = false
   }
 
   private suspend fun verifyAccountLogin(account: TestChatAccount, password: String): Boolean {
@@ -568,6 +691,15 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
           )
       snapshot.copy(threads = updated)
     }
+  }
+
+  fun createThreadAndOpen(title: String, hostLabel: String, sessionName: String) {
+    val normalizedHost = normalizeHostLabel(hostLabel)
+    val session = sessionName.trim().ifBlank { "main" }
+    val chatId = "machine:${normalizedHost}/${session}"
+    createThread(title, hostLabel, sessionName)
+    openChat(chatId)
+    sendMessage("/new")
   }
 
   fun sendMessage(text: String) {
@@ -754,10 +886,11 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
             if (payload != null && text.isNullOrBlank()) return
             val output = text ?: data
             if (output.isBlank()) return
-            val messageId =
+            val rawMessageId =
               payload?.id?.trim().orEmpty()
                 .ifBlank { id?.trim().orEmpty() }
                 .ifBlank { UUID.randomUUID().toString() }
+            val messageId = "${normalizeHostLabel(host.label)}:${rawMessageId}"
             val eventId = id?.toLongOrNull() ?: payload?.id?.toLongOrNull()
             if (eventId != null) {
               prefs.saveLastEventId(host.label, eventId)
@@ -902,8 +1035,12 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
 
   private suspend fun loadAccount(account: TestChatAccount) {
     val snapshot = store.load(getApplication(), account)
-    _snapshot.value = snapshot
-    ensureDefaultThread(snapshot)
+    val cleaned = dedupeThreads(snapshot)
+    _snapshot.value = cleaned
+    if (cleaned.threads.size != snapshot.threads.size) {
+      schedulePersist()
+    }
+    ensureDefaultThread(cleaned)
   }
 
   private fun ensureDefaultThread(snapshot: TestChatSnapshot) {
@@ -919,9 +1056,44 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   }
 
   private fun updateSnapshot(transform: (TestChatSnapshot) -> TestChatSnapshot) {
-    val next = transform(_snapshot.value)
+    val next = dedupeThreads(transform(_snapshot.value))
     _snapshot.value = next
     schedulePersist()
+  }
+
+  private fun dedupeThreads(snapshot: TestChatSnapshot): TestChatSnapshot {
+    if (snapshot.threads.size <= 1) return snapshot
+    val merged = LinkedHashMap<String, TestChatThread>()
+    for (thread in snapshot.threads) {
+      val existing = merged[thread.chatId]
+      if (existing == null) {
+        merged[thread.chatId] = thread
+        continue
+      }
+      val latest = if (thread.lastTimestampMs >= existing.lastTimestampMs) thread else existing
+      val mergedUnread = maxOf(existing.unreadCount, thread.unreadCount)
+      val mergedPinned = existing.isPinned || thread.isPinned
+      val mergedArchived = existing.isArchived && thread.isArchived
+      val mergedDeleted = existing.isDeleted && thread.isDeleted
+      val mergedDeletedAt =
+        if (mergedDeleted) {
+          listOfNotNull(existing.deletedAt, thread.deletedAt).maxOrNull()
+        } else {
+          null
+        }
+      val mergedThread =
+        latest.copy(
+          title = latest.title.ifBlank { existing.title },
+          lastMessage = latest.lastMessage.ifBlank { existing.lastMessage },
+          unreadCount = mergedUnread,
+          isPinned = mergedPinned,
+          isArchived = mergedArchived,
+          isDeleted = mergedDeleted,
+          deletedAt = mergedDeletedAt,
+        )
+      merged[thread.chatId] = mergedThread
+    }
+    return snapshot.copy(threads = merged.values.toList())
   }
 
   private fun schedulePersist() {
@@ -946,7 +1118,7 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     if (trimmed.startsWith("machine:") || trimmed.startsWith("device:")) return trimmed
     if (trimmed.contains("/") || trimmed.contains("|")) return trimmed
     if (normalizedHost == "default") return trimmed
-    if (trimmed.startsWith("user:") || trimmed.startsWith("test:")) {
+    if (trimmed.startsWith("user:") || trimmed.startsWith("vimalinx:")) {
       val session = trimmed.substringAfter(":").ifBlank { "main" }
       return "machine:${normalizedHost}/${session}"
     }
@@ -985,6 +1157,14 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     val errorText: String?,
     val snapshot: TestChatSnapshot,
     val activeChatId: String?,
+  )
+
+  private data class UiStateExtras(
+    val base: UiStateParts,
+    val tokenUsage: Map<String, TestChatTokenUsage>,
+    val inviteRequired: Boolean?,
+    val serverTestMessage: String?,
+    val serverTestSuccess: Boolean?,
   )
 
   private data class SessionUsageAccumulator(
@@ -1040,6 +1220,60 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     }
     tokens += (asciiRun + 3) / 4
     return tokens
+  }
+
+  private fun JsonElement?.asObjectOrNull(): JsonObject? = this as? JsonObject
+
+  private fun JsonElement?.asStringOrNull(): String? =
+    when (this) {
+      is JsonNull -> null
+      is JsonPrimitive -> content
+      else -> null
+    }
+
+  private fun resolvedVersionName(): String {
+    val versionName = BuildConfig.VERSION_NAME.trim().ifEmpty { "dev" }
+    return if (BuildConfig.DEBUG && !versionName.contains("dev", ignoreCase = true)) {
+      "${'$'}versionName-dev"
+    } else {
+      versionName
+    }
+  }
+
+  private fun buildUserAgent(): String {
+    val version = resolvedVersionName()
+    val release = Build.VERSION.RELEASE?.trim().orEmpty()
+    val releaseLabel = if (release.isEmpty()) "unknown" else release
+    return "ClawdbotAndroid/${'$'}version (Android ${'$'}releaseLabel; SDK ${'$'}{Build.VERSION.SDK_INT})"
+  }
+
+  private fun normalizeVersion(raw: String?): String {
+    return raw?.trim()?.removePrefix("v")?.removePrefix("V")?.trim().orEmpty()
+  }
+
+  private fun isRemoteNewer(remote: String, current: String): Boolean {
+    if (remote.isBlank()) return false
+    if (current.isBlank()) return true
+
+    fun split(v: String): List<String> = v.split('.', '-', '_').filter { it.isNotBlank() }
+    val rParts = split(remote)
+    val cParts = split(current)
+    val max = maxOf(rParts.size, cParts.size)
+
+    for (i in 0 until max) {
+      val r = rParts.getOrNull(i).orEmpty()
+      val c = cParts.getOrNull(i).orEmpty()
+      val rNum = r.toIntOrNull()
+      val cNum = c.toIntOrNull()
+      if (rNum != null && cNum != null) {
+        if (rNum > cNum) return true
+        if (rNum < cNum) return false
+        continue
+      }
+      if (r > c) return true
+      if (r < c) return false
+    }
+    return false
   }
 
   companion object {

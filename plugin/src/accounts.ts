@@ -1,4 +1,4 @@
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "clawdbot/plugin-sdk";
+import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk";
 
 import type { TestAccountConfig, TestConfig } from "./types.js";
 
@@ -15,7 +15,7 @@ export type ResolvedTestAccount = {
 };
 
 function listConfiguredAccountIds(cfg: TestConfig): string[] {
-  const accounts = cfg.channels?.test?.accounts;
+  const accounts = cfg.channels?.vimalinx?.accounts;
   if (!accounts || typeof accounts !== "object") return [];
   const ids = new Set<string>();
   for (const key of Object.keys(accounts)) {
@@ -38,7 +38,7 @@ export function resolveDefaultTestAccountId(cfg: TestConfig): string {
 }
 
 function resolveAccountConfig(cfg: TestConfig, accountId: string): TestAccountConfig | undefined {
-  const accounts = cfg.channels?.test?.accounts;
+  const accounts = cfg.channels?.vimalinx?.accounts;
   if (!accounts || typeof accounts !== "object") return undefined;
   const direct = accounts[accountId] as TestAccountConfig | undefined;
   if (direct) return direct;
@@ -48,7 +48,7 @@ function resolveAccountConfig(cfg: TestConfig, accountId: string): TestAccountCo
 }
 
 function mergeTestAccountConfig(cfg: TestConfig, accountId: string): TestAccountConfig {
-  const { accounts: _ignored, ...base } = (cfg.channels?.test ?? {}) as TestAccountConfig & {
+  const { accounts: _ignored, ...base } = (cfg.channels?.vimalinx ?? {}) as TestAccountConfig & {
     accounts?: unknown;
   };
   const account = resolveAccountConfig(cfg, accountId) ?? {};
@@ -61,7 +61,7 @@ export function resolveTestAccount(params: {
 }): ResolvedTestAccount {
   const normalized = normalizeAccountId(params.accountId);
   const merged = mergeTestAccountConfig(params.cfg, normalized);
-  const baseEnabled = params.cfg.channels?.test?.enabled !== false;
+  const baseEnabled = params.cfg.channels?.vimalinx?.enabled !== false;
   const enabled = baseEnabled && merged.enabled !== false;
   const baseUrl = merged.baseUrl?.trim().replace(/\/$/, "");
   const token = merged.token?.trim();

@@ -2,7 +2,7 @@
 
 English | [中文](README.md)
 
-Minimal chat server for the Vimalinx Server channel plugin (`test`).
+Minimal chat server for the Vimalinx Server channel plugin (`vimalinx`).
 
 ## Quick start (local, poll mode)
 
@@ -65,7 +65,7 @@ Set the inbound mode to webhook and point the server at the Gateway webhook URL:
 
 ```bash
 export TEST_INBOUND_MODE=webhook
-export TEST_GATEWAY_URL=https://gateway-host:18789/test-webhook
+export TEST_GATEWAY_URL=https://gateway-host:18789/vimalinx-webhook
 ```
 
 Notes:
@@ -101,7 +101,7 @@ node server/server.mjs
 - `POST /api/token/usage` list token usage for a user (requires `userId` + `password`)
 - `POST /api/login` login with token (mobile/Clawdbot)
 - `POST /send` receive replies from Gateway (Authorization: Bearer `<user token>` or `TEST_SERVER_TOKEN`)
-  - If signatures are enabled, include `x-test-timestamp`, `x-test-nonce`, `x-test-signature`
+  - If signatures are enabled, include `x-vimalinx-timestamp`, `x-vimalinx-nonce`, `x-vimalinx-signature`
 
 ## Payloads
 
@@ -153,9 +153,9 @@ Outbound from Gateway (plugin -> server):
 Signature headers (when enabled):
 
 ```
-x-test-timestamp: <unix_ms>
-x-test-nonce: <random>
-x-test-signature: HMAC_SHA256(secret, "${timestamp}.${nonce}.${rawBody}")
+x-vimalinx-timestamp: <unix_ms>
+x-vimalinx-nonce: <random>
+x-vimalinx-signature: HMAC_SHA256(secret, "${timestamp}.${nonce}.${rawBody}")
 ```
 
 Register payload (client -> server):

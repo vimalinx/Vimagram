@@ -87,7 +87,7 @@ class TestChatForegroundService : Service() {
     val text = "$userLabel · $hostLabel"
 
     return NotificationCompat.Builder(this, CHANNEL_ID)
-      .setSmallIcon(R.mipmap.ic_launcher)
+      .setSmallIcon(R.drawable.ic_notification)
       .setContentTitle(getString(R.string.notification_running_title))
       .setContentText(text)
       .setContentIntent(launchPending)

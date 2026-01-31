@@ -4,13 +4,13 @@ import type {
   ClawdbotConfig,
   DmPolicy,
   WizardPrompter,
-} from "clawdbot/plugin-sdk";
+} from "openclaw/plugin-sdk";
 import {
   DEFAULT_ACCOUNT_ID,
   addWildcardAllowFrom,
   normalizeAccountId,
   promptAccountId,
-} from "clawdbot/plugin-sdk";
+} from "openclaw/plugin-sdk";
 
 import {
   listTestAccountIds,
@@ -19,21 +19,14 @@ import {
 } from "./accounts.js";
 import type { TestConfig } from "./types.js";
 
-const channel = "test" as const;
-const PLUGIN_ID = "test";
-const LEGACY_PLUGIN_ID = "vimalinx-server-plugin";
+const channel = "vimalinx" as const;
+const PLUGIN_ID = "vimalinx";
 
 function ensurePluginEntry(cfg: ClawdbotConfig): ClawdbotConfig {
   const plugins = (cfg.plugins ?? {}) as Record<string, unknown>;
   const entries = (plugins.entries ?? {}) as Record<string, unknown>;
   const nextEntries: Record<string, unknown> = { ...entries };
 
-  if (LEGACY_PLUGIN_ID in nextEntries && !(PLUGIN_ID in nextEntries)) {
-    nextEntries[PLUGIN_ID] = nextEntries[LEGACY_PLUGIN_ID];
-  }
-  if (LEGACY_PLUGIN_ID in nextEntries) {
-    delete nextEntries[LEGACY_PLUGIN_ID];
-  }
   const current = (nextEntries[PLUGIN_ID] ?? {}) as Record<string, unknown>;
   nextEntries[PLUGIN_ID] = { ...current, enabled: true };
 
@@ -92,8 +85,8 @@ function setTestAccountConfig(
       ...cfg,
       channels: {
         ...cfg.channels,
-        test: {
-          ...cfg.channels?.test,
+        vimalinx: {
+          ...cfg.channels?.vimalinx,
           enabled: true,
           ...patch,
         },
@@ -104,14 +97,14 @@ function setTestAccountConfig(
     ...cfg,
     channels: {
       ...cfg.channels,
-      test: {
-        ...cfg.channels?.test,
+      vimalinx: {
+        ...cfg.channels?.vimalinx,
         enabled: true,
         accounts: {
-          ...cfg.channels?.test?.accounts,
+          ...cfg.channels?.vimalinx?.accounts,
           [accountId]: {
-            ...cfg.channels?.test?.accounts?.[accountId],
-            enabled: cfg.channels?.test?.accounts?.[accountId]?.enabled ?? true,
+            ...cfg.channels?.vimalinx?.accounts?.[accountId],
+            enabled: cfg.channels?.vimalinx?.accounts?.[accountId]?.enabled ?? true,
             ...patch,
           },
         },
@@ -169,14 +162,14 @@ async function promptTestAllowFrom(params: {
 const dmPolicy: ChannelOnboardingDmPolicy = {
   label: "Vimalinx Server",
   channel,
-  policyKey: "channels.test.dmPolicy",
-  allowFromKey: "channels.test.allowFrom",
+  policyKey: "channels.vimalinx.dmPolicy",
+  allowFromKey: "channels.vimalinx.allowFrom",
   getCurrent: resolveTestDmPolicy,
   setPolicy: setTestDmPolicy,
   promptAllowFrom: promptTestAllowFrom,
 };
 
-export const testOnboardingAdapter: ChannelOnboardingAdapter = {
+export const vimalinxOnboardingAdapter: ChannelOnboardingAdapter = {
   channel,
   getStatus: async ({ cfg }) => {
     const configured = listTestAccountIds(cfg as TestConfig).some((accountId) =>
@@ -205,7 +198,7 @@ export const testOnboardingAdapter: ChannelOnboardingAdapter = {
     shouldPromptAccountIds,
     forceAllowFrom,
   }) => {
-    const override = accountOverrides.test?.trim();
+    const override = accountOverrides.vimalinx?.trim();
     const defaultAccountId = resolveDefaultTestAccountId(cfg as TestConfig);
     let accountId = override ? normalizeAccountId(override) : defaultAccountId;
     if (shouldPromptAccountIds && !override) {
@@ -286,7 +279,7 @@ export const testOnboardingAdapter: ChannelOnboardingAdapter = {
     ...cfg,
     channels: {
       ...cfg.channels,
-      test: { ...cfg.channels?.test, enabled: false },
+      vimalinx: { ...cfg.channels?.vimalinx, enabled: false },
     },
   }),
 };

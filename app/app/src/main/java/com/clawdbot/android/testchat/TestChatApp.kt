@@ -1,14 +1,19 @@
 package com.clawdbot.android.testchat
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import com.clawdbot.android.AppLocale
 import com.clawdbot.android.R
+import com.clawdbot.android.UpdateState
+import com.clawdbot.android.UpdateStatus
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,6 +62,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
@@ -67,6 +73,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -138,7 +145,10 @@ fun TestChatApp(viewModel: TestChatViewModel) {
     if (!state.isAuthenticated) {
       AccountScreen(
         errorText = state.errorText,
-        serverTestMessage = serverTestMessage,
+        inviteRequired = state.inviteRequired,
+        serverTestMessage = state.serverTestMessage,
+        serverTestSuccess = state.serverTestSuccess,
+        serverTestInProgress = state.serverTestInProgress,
         initialUserId = state.account?.userId,
         initialServerUrl = state.account?.serverUrl,
         serverConfig = serverConfig,
@@ -151,6 +161,8 @@ fun TestChatApp(viewModel: TestChatViewModel) {
         },
         onLogin = viewModel::loginAccount,
         onTestServer = viewModel::testServerConnection,
+        onClearServerTest = viewModel::clearServerTestStatus,
+        onFetchServerConfig = viewModel::fetchServerConfig,
       )
     } else if (state.activeChatId != null) {
       ChatScreen(
@@ -173,13 +185,15 @@ fun TestChatApp(viewModel: TestChatViewModel) {
                 onLogout = viewModel::logout,
                 languageTag = languageTag,
                 onLanguageChange = viewModel::setLanguageTag,
+                updateState = viewModel.updateState.collectAsState().value,
+                onCheckUpdates = viewModel::checkForUpdates,
               )
             }
             MainTab.Chat -> {
               ChatListScreen(
                 state = state,
                 onOpenChat = viewModel::openChat,
-                onNewChat = viewModel::createThread,
+                onNewChat = viewModel::createThreadAndOpen,
                 onGenerateHost = viewModel::generateHostToken,
                 onRenameThread = viewModel::renameThread,
                 onTogglePinThread = viewModel::togglePinThread,
@@ -243,7 +257,10 @@ private enum class MainTab {
 @Composable
 private fun AccountScreen(
   errorText: String?,
+  inviteRequired: Boolean?,
   serverTestMessage: String?,
+  serverTestSuccess: Boolean?,
+  serverTestInProgress: Boolean,
   initialUserId: String?,
   initialServerUrl: String?,
   serverConfig: TestServerConfigState,
@@ -251,12 +268,14 @@ private fun AccountScreen(
   onClearServerTest: () -> Unit,
   onRegister: (serverUrl: String, userId: String, inviteCode: String, password: String) -> Unit,
   onLogin: (serverUrl: String, userId: String, password: String) -> Unit,
-  onTestServer: (String) -> Unit,
+  onTestServer: (serverUrl: String) -> Unit,
+  onClearServerTest: () -> Unit,
+  onFetchServerConfig: (serverUrl: String) -> Unit,
 ) {
   val vimalinxServerLabel = stringResource(R.string.label_vimalinx_server)
   val serverOptions = remember(vimalinxServerLabel) {
     mutableStateListOf(
-      ServerOption(label = vimalinxServerLabel, url = DEFAULT_SERVER_URL),
+      ServerOption(label = "Direct", url = DEFAULT_SERVER_URL),
     )
   }
   val startingServer = initialServerUrl?.trim().orEmpty()
@@ -286,9 +305,9 @@ private fun AccountScreen(
     }
 
   LaunchedEffect(selectedServer) {
-    onRefreshServerConfig(selectedServer)
     onClearServerTest()
-    if (serverOptions.none { it.url == selectedServer } && selectedServer.isNotBlank()) {
+    onFetchServerConfig(selectedServer)
+    if (selectedServer.isNotBlank() && serverOptions.none { it.url == selectedServer }) {
       serverOptions.add(
         ServerOption(
           label = formatServerLabel(selectedServer, unknownServerLabel),
@@ -357,7 +376,36 @@ private fun AccountScreen(
             selectedUrl = selectedServer,
             onSelected = { selectedServer = it },
             onAddServer = { showAddServer = true },
+            onRemoveServer = { url ->
+              if (serverOptions.size <= 1) {
+                return@ServerPicker
+              }
+              serverOptions.removeAll { it.url == url }
+              if (selectedServer == url) {
+                selectedServer = serverOptions.firstOrNull()?.url ?: ""
+              }
+            }
           )
+          if (!serverTestMessage.isNullOrBlank()) {
+            if (serverTestSuccess == true) {
+              InfoCard(text = serverTestMessage)
+            } else {
+              ErrorCard(text = serverTestMessage)
+            }
+          }
+          OutlinedButton(
+            onClick = { onTestServer(selectedServer) },
+            enabled = selectedServer.isNotBlank() && !serverTestInProgress,
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Text(
+              if (serverTestInProgress) {
+                stringResource(R.string.status_testing)
+              } else {
+                stringResource(R.string.action_test_server)
+              },
+            )
+          }
           Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = { onTestServer(selectedServer) }) {
               Text(stringResource(R.string.action_test_connection))
@@ -402,26 +450,24 @@ private fun AccountScreen(
               singleLine = true,
               colors = textFieldColors(),
             )
-            if (!allowRegistration) {
-              InfoCard(text = stringResource(R.string.info_registration_disabled))
-            }
-            if (inviteRequirement == false) {
-              InfoCard(text = stringResource(R.string.info_invite_not_required))
-            } else {
-              TextField(
-                value = inviteCode,
-                onValueChange = { inviteCode = it },
-                label = { Text(stringResource(inviteLabelRes)) },
-                placeholder =
-                  if (inviteRequirement == null) {
-                    { Text(stringResource(R.string.placeholder_invite_optional)) }
+          val inviteIsRequired = inviteRequired == true
+          TextField(
+            value = inviteCode,
+            onValueChange = { inviteCode = it },
+            label = {
+              Text(
+                stringResource(
+                  if (inviteIsRequired) {
+                    R.string.label_invite_code
                   } else {
-                    null
+                    R.string.label_invite_code_optional
                   },
-                singleLine = true,
-                colors = textFieldColors(),
+                ),
               )
-            }
+            },
+            singleLine = true,
+            colors = textFieldColors(),
+          )
             TextField(
               value = registerPassword,
               onValueChange = { registerPassword = it },
@@ -434,10 +480,9 @@ private fun AccountScreen(
               onClick = { onRegister(selectedServer, registerUserId, inviteCode, registerPassword) },
               modifier = Modifier.fillMaxWidth(),
               enabled =
-                allowRegistration &&
-                  registerUserId.isNotBlank() &&
+                registerUserId.isNotBlank() &&
                   registerPassword.isNotBlank() &&
-                  (inviteRequirement != true || inviteCode.isNotBlank()),
+                  (!inviteIsRequired || inviteCode.isNotBlank()),
             ) {
               Text(stringResource(R.string.action_register))
             }
@@ -475,7 +520,9 @@ private fun AccountScreen(
           onClick = {
             val label = newServerName.trim().ifBlank { defaultServerLabel }
             val url = normalizeServerUrl(newServerUrl)
-            serverOptions.add(ServerOption(label = label, url = url))
+            if (serverOptions.none { it.url == url }) {
+              serverOptions.add(ServerOption(label = label, url = url))
+            }
             selectedServer = url
             newServerName = ""
             newServerUrl = ""
@@ -951,14 +998,20 @@ private fun ChatScreen(
   val listState = rememberLazyListState()
   val messageTextSize = resolveMessageTextSize()
   val markdown = rememberMarkwon(messageTextSize)
+  var didInitialScroll by remember(chatId) { mutableStateOf(false) }
 
   BackHandler(enabled = true) {
     onBack()
   }
 
-  LaunchedEffect(state.messages.size) {
+  LaunchedEffect(chatId, state.messages.size) {
     if (state.messages.isNotEmpty()) {
-      listState.animateScrollToItem(state.messages.size - 1)
+      if (!didInitialScroll) {
+        listState.scrollToItem(state.messages.size - 1)
+        didInitialScroll = true
+      } else {
+        listState.animateScrollToItem(state.messages.size - 1)
+      }
     }
   }
 
@@ -1039,6 +1092,8 @@ private fun AccountDashboardScreen(
   onLogout: () -> Unit,
   languageTag: String,
   onLanguageChange: (String) -> Unit,
+  updateState: UpdateState,
+  onCheckUpdates: () -> Unit,
 ) {
   val account = state.account
   val userLabel = account?.userId ?: stringResource(R.string.label_unknown_user)
@@ -1048,8 +1103,8 @@ private fun AccountDashboardScreen(
   val hosts = state.hosts
   val clipboard = LocalClipboardManager.current
   val context = LocalContext.current
-  val authorUrl = "https://vimalinx.xyz"
   var showLogoutConfirm by remember { mutableStateOf(false) }
+  var showSettingsSheet by remember { mutableStateOf(false) }
 
   Scaffold(
     topBar = {
@@ -1108,32 +1163,12 @@ private fun AccountDashboardScreen(
         )
       }
       item {
-        SectionHeader(text = stringResource(R.string.title_about_author))
-        Card(
-          shape = RoundedCornerShape(18.dp),
-          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        SectionHeader(text = stringResource(R.string.title_settings))
+        Button(
+          onClick = { showSettingsSheet = true },
+          modifier = Modifier.fillMaxWidth(),
         ) {
-          Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-          ) {
-            Text(
-              text = stringResource(R.string.label_author_site),
-              style = MaterialTheme.typography.bodyMedium,
-            )
-            OutlinedButton(onClick = { openExternalUrl(context, authorUrl) }) {
-              Text(stringResource(R.string.action_open_site))
-            }
-            Image(
-              painter = painterResource(R.drawable.xiaohongshu_card),
-              contentDescription = stringResource(R.string.label_xiaohongshu_card),
-              modifier =
-                Modifier
-                  .fillMaxWidth()
-                  .clip(RoundedCornerShape(16.dp)),
-              contentScale = ContentScale.FillWidth,
-            )
-          }
+          Text(stringResource(R.string.action_open_settings))
         }
       }
       item {
@@ -1169,6 +1204,34 @@ private fun AccountDashboardScreen(
         }
       },
     )
+  }
+
+  if (showSettingsSheet) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(
+      onDismissRequest = { showSettingsSheet = false },
+      sheetState = sheetState,
+    ) {
+      Column(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
+        SectionHeader(text = stringResource(R.string.title_updates))
+        UpdateSettingsSection(
+          updateState = updateState,
+          onCheckUpdates = onCheckUpdates,
+          onOpenRelease = { url ->
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+          },
+        )
+        SectionHeader(text = stringResource(R.string.title_links))
+        LinksSection(
+          onOpenLink = { url ->
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+          },
+        )
+      }
+    }
   }
 }
 
@@ -1210,6 +1273,113 @@ private fun SectionHeader(text: String) {
     style = MaterialTheme.typography.titleMedium,
     fontWeight = FontWeight.SemiBold,
   )
+}
+
+@Composable
+private fun UpdateSettingsSection(
+  updateState: UpdateState,
+  onCheckUpdates: () -> Unit,
+  onOpenRelease: (String) -> Unit,
+) {
+  val statusText =
+    when (updateState.status) {
+      UpdateStatus.Idle -> stringResource(R.string.status_update_idle)
+      UpdateStatus.Checking -> stringResource(R.string.status_update_checking)
+      UpdateStatus.Ready ->
+        if (updateState.isUpdateAvailable) {
+          stringResource(R.string.status_update_available)
+        } else {
+          stringResource(R.string.status_update_uptodate)
+        }
+      UpdateStatus.Error -> updateState.error ?: stringResource(R.string.status_update_failed)
+    }
+  InfoCard(text = statusText)
+  val checking = updateState.status == UpdateStatus.Checking
+  Button(
+    onClick = onCheckUpdates,
+    enabled = !checking,
+    modifier = Modifier.fillMaxWidth(),
+  ) {
+    Text(
+      if (checking) stringResource(R.string.action_check_updates_working)
+      else stringResource(R.string.action_check_updates),
+    )
+  }
+
+  if (updateState.status == UpdateStatus.Ready && updateState.isUpdateAvailable) {
+    val releaseTitle = updateState.latestName ?: updateState.latestTag ?: stringResource(R.string.label_update_release)
+    val notes = updateState.releaseNotes?.trim()?.take(1200).orEmpty()
+    val htmlUrl = updateState.htmlUrl.orEmpty()
+    Card(
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+      modifier = Modifier.fillMaxWidth(),
+    ) {
+      Column(
+        modifier = Modifier.padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Text(text = releaseTitle, style = MaterialTheme.typography.titleSmall)
+        if (notes.isNotBlank()) {
+          Text(
+            text = notes,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 12,
+            overflow = TextOverflow.Ellipsis,
+          )
+        } else {
+          Text(
+            text = stringResource(R.string.info_update_release_notes),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        Button(
+          onClick = { if (htmlUrl.isNotBlank()) onOpenRelease(htmlUrl) },
+          enabled = htmlUrl.isNotBlank(),
+        ) {
+          Text(stringResource(R.string.action_view_release))
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun LinksSection(
+  onOpenLink: (String) -> Unit,
+) {
+  val xhsUrl = "https://xhslink.com/m/487YEE3Jygk"
+  val siteUrl = "https://vimalinx.xyz"
+  Card(
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    modifier = Modifier.fillMaxWidth(),
+  ) {
+    Column(
+      modifier = Modifier.padding(12.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      Text(text = stringResource(R.string.label_xhs), style = MaterialTheme.typography.titleSmall)
+      Image(
+        painter = painterResource(R.drawable.xhs),
+        contentDescription = stringResource(R.string.label_xhs),
+        contentScale = ContentScale.Crop,
+        modifier =
+          Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onOpenLink(xhsUrl) },
+      )
+      Text(text = stringResource(R.string.label_website), style = MaterialTheme.typography.titleSmall)
+      OutlinedButton(
+        onClick = { onOpenLink(siteUrl) },
+        modifier = Modifier.fillMaxWidth(),
+      ) {
+        Text(siteUrl)
+      }
+    }
+  }
 }
 
 @Composable
@@ -1443,6 +1613,7 @@ private fun ServerPicker(
   selectedUrl: String,
   onSelected: (String) -> Unit,
   onAddServer: () -> Unit,
+  onRemoveServer: (String) -> Unit,
 ) {
   Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     Row(
@@ -1468,6 +1639,12 @@ private fun ServerPicker(
         if (isSelected) {
           Button(onClick = { onSelected(server.url) }) {
             Text(server.label)
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+              imageVector = Icons.Default.Delete,
+              contentDescription = "Remove",
+              modifier = Modifier.size(16.dp).clickable { onRemoveServer(server.url) },
+            )
           }
         } else {
           OutlinedButton(onClick = { onSelected(server.url) }) {

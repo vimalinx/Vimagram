@@ -58,7 +58,7 @@ VIMALINX_FORCE_OVERWRITE=1 ./install.sh
 ## Configure (wizard)
 
 ```bash
-clawdbot onboard
+openclaw onboard
 ```
 
 The wizard will:
@@ -72,21 +72,21 @@ Minimal config (single account):
 
 ```yaml
 channels:
-  test:
-    baseUrl: https://vimagram.vimalinx.xyz
+  vimalinx:
+    baseUrl: http://server-host:8788
     userId: user-id
     token: host-token
     inboundMode: poll
 ```
 
 Optional fields:
-- `webhookPath` (default `/test-webhook`)
+- `webhookPath` (default `/vimalinx-webhook`)
 - `webhookToken` (defaults to `token`)
 
 ## Verify
 
 ```bash
-clawdbot channels status --probe
+openclaw channels status --probe
 ```
 
 If everything is healthy, the channel should show as connected/polling.

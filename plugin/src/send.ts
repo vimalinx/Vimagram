@@ -1,4 +1,4 @@
-import type { OutboundDeliveryResult } from "clawdbot/plugin-sdk";
+import type { OutboundDeliveryResult } from "openclaw/plugin-sdk";
 
 import { resolveTestAccount } from "./accounts.js";
 import {
@@ -33,12 +33,12 @@ export async function sendTestMessage(params: {
     accountId: params.accountId,
   });
   if (!account.baseUrl) {
-    throw new Error("Test baseUrl is not configured.");
+    throw new Error("Vimalinx baseUrl is not configured.");
   }
 
   const security = resolveTestSecurityConfig(account.config.security);
   if (security.requireHttps && !isHttpsUrl(account.baseUrl)) {
-    throw new Error("Test baseUrl must use https when requireHttps is enabled.");
+    throw new Error("Vimalinx baseUrl must use https when requireHttps is enabled.");
   }
 
   const headers: Record<string, string> = {
@@ -64,9 +64,9 @@ export async function sendTestMessage(params: {
       nonce,
       body,
     });
-    headers["x-test-timestamp"] = String(timestamp);
-    headers["x-test-nonce"] = nonce;
-    headers["x-test-signature"] = signature;
+    headers["x-vimalinx-timestamp"] = String(timestamp);
+    headers["x-vimalinx-nonce"] = nonce;
+    headers["x-vimalinx-signature"] = signature;
   }
 
   const response = await fetch(buildSendUrl(account.baseUrl), {
@@ -76,17 +76,17 @@ export async function sendTestMessage(params: {
   });
 
   if (!response.ok) {
-    throw new Error(`Test send failed (${response.status} ${response.statusText}).`);
+    throw new Error(`Vimalinx send failed (${response.status} ${response.statusText}).`);
   }
 
   const data = (await response.json().catch(() => ({}))) as { messageId?: unknown };
   const messageId =
     typeof data.messageId === "string" && data.messageId.trim()
       ? data.messageId.trim()
-      : `test-${Date.now()}`;
+      : `vimalinx-${Date.now()}`;
 
   return {
-    channel: "test",
+    channel: "vimalinx",
     messageId,
     chatId: params.to,
   };

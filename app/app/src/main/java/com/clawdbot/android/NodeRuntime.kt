@@ -36,6 +36,8 @@ import com.clawdbot.android.protocol.ClawdbotLocationCommand
 import com.clawdbot.android.protocol.ClawdbotSmsCommand
 import com.clawdbot.android.voice.TalkModeManager
 import com.clawdbot.android.voice.VoiceWakeManager
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,6 +63,7 @@ import java.util.concurrent.atomic.AtomicLong
 class NodeRuntime(context: Context) {
   private val appContext = context.applicationContext
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  private val httpClient by lazy { OkHttpClient() }
 
   val prefs = SecurePrefs(appContext)
   private val deviceAuthStore = DeviceAuthStore(prefs)
@@ -131,6 +134,9 @@ class NodeRuntime(context: Context) {
 
   private val _screenRecordActive = MutableStateFlow(false)
   val screenRecordActive: StateFlow<Boolean> = _screenRecordActive.asStateFlow()
+
+  private val _updateState = MutableStateFlow(UpdateState())
+  val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
   private val _serverName = MutableStateFlow<String?>(null)
   val serverName: StateFlow<String?> = _serverName.asStateFlow()
@@ -611,6 +617,70 @@ class NodeRuntime(context: Context) {
     connectedEndpoint = null
     operatorSession.disconnect()
     nodeSession.disconnect()
+  }
+
+   /**
+    * Fetch the latest GitHub release and expose a simple update state.
+    * Uses public API: https://api.github.com/repos/vimalinx/vimalinx-suite-core/releases/latest
+    */
+  fun checkForUpdates() {
+    val currentVersion = resolvedVersionName()
+    _updateState.value = UpdateState(status = UpdateStatus.Checking, currentVersion = currentVersion)
+
+    scope.launch {
+      val req =
+        Request.Builder()
+          .url("https://api.github.com/repos/vimalinx/vimalinx-suite-core/releases/latest")
+          .header("User-Agent", buildUserAgent())
+          .build()
+
+      val newState =
+        try {
+          httpClient.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+              return@use UpdateState(
+                status = UpdateStatus.Error,
+                currentVersion = currentVersion,
+                error = "HTTP ${resp.code}",
+              )
+            }
+
+            val bodyStr = resp.body?.string()?.trim().orEmpty()
+            if (bodyStr.isEmpty()) {
+              return@use UpdateState(status = UpdateStatus.Error, currentVersion = currentVersion, error = "empty body")
+            }
+
+            val root = json.parseToJsonElement(bodyStr).asObjectOrNull() ?: return@use UpdateState(
+              status = UpdateStatus.Error,
+              currentVersion = currentVersion,
+              error = "invalid json",
+            )
+
+            val tagRaw = root["tag_name"].asStringOrNull().orEmpty()
+            val name = root["name"].asStringOrNull().orEmpty()
+            val body = root["body"].asStringOrNull().orEmpty()
+            val htmlUrl = root["html_url"].asStringOrNull().orEmpty()
+
+            val normalizedRemote = normalizeVersion(tagRaw)
+            val normalizedCurrent = normalizeVersion(currentVersion)
+            val newer = isRemoteNewer(normalizedRemote, normalizedCurrent)
+
+            UpdateState(
+              status = UpdateStatus.Ready,
+              currentVersion = currentVersion,
+              latestTag = tagRaw,
+              latestName = name.ifBlank { tagRaw },
+              releaseNotes = body,
+              htmlUrl = htmlUrl,
+              isUpdateAvailable = newer,
+            )
+          }
+        } catch (err: Throwable) {
+          UpdateState(status = UpdateStatus.Error, currentVersion = currentVersion, error = err.message ?: "request failed")
+        }
+
+      _updateState.value = newState
+    }
   }
 
   private fun resolveTlsParams(endpoint: GatewayEndpoint): GatewayTlsParams? {
@@ -1238,6 +1308,48 @@ private fun a2uiApplyMessagesJS(messagesJson: String): String {
       }
     })()
   """.trimIndent()
+}
+
+data class UpdateState(
+  val status: UpdateStatus = UpdateStatus.Idle,
+  val currentVersion: String = "",
+  val latestTag: String? = null,
+  val latestName: String? = null,
+  val releaseNotes: String? = null,
+  val htmlUrl: String? = null,
+  val isUpdateAvailable: Boolean = false,
+  val error: String? = null,
+)
+
+enum class UpdateStatus { Idle, Checking, Ready, Error }
+
+private fun normalizeVersion(raw: String?): String {
+  return raw?.trim()?.removePrefix("v")?.removePrefix("V")?.trim().orEmpty()
+}
+
+private fun isRemoteNewer(remote: String, current: String): Boolean {
+  if (remote.isBlank()) return false
+  if (current.isBlank()) return true
+
+  fun split(v: String): List<String> = v.split('.', '-', '_').filter { it.isNotBlank() }
+  val rParts = split(remote)
+  val cParts = split(current)
+  val max = maxOf(rParts.size, cParts.size)
+
+  for (i in 0 until max) {
+    val r = rParts.getOrNull(i).orEmpty()
+    val c = cParts.getOrNull(i).orEmpty()
+    val rNum = r.toIntOrNull()
+    val cNum = c.toIntOrNull()
+    if (rNum != null && cNum != null) {
+      if (rNum > cNum) return true
+      if (rNum < cNum) return false
+      continue
+    }
+    if (r > c) return true
+    if (r < c) return false
+  }
+  return false
 }
 
 private fun String.toJsonString(): String {

@@ -5,7 +5,7 @@ import {
   resolveNestedAllowlistDecision,
   type ClawdbotConfig,
   type RuntimeEnv,
-} from "clawdbot/plugin-sdk";
+} from "openclaw/plugin-sdk";
 
 import type { ResolvedTestAccount } from "./accounts.js";
 import {
@@ -17,7 +17,7 @@ import { sendTestMessage } from "./send.js";
 import { getTestRuntime } from "./runtime.js";
 import type { TestConfig, TestGroupConfig, TestInboundMessage } from "./types.js";
 
-const CHANNEL_ID = "test" as const;
+const CHANNEL_ID = "vimalinx" as const;
 
 type GroupMatch = {
   groupConfig?: TestGroupConfig;
@@ -180,11 +180,11 @@ export async function handleTestInbound(params: {
   const security = resolveTestSecurityConfig(account.config.security);
   if (!params.rateLimitChecked) {
     const allowed = checkSenderRateLimit(
-      `test:${account.accountId}:${senderId}`,
+      `vimalinx:${account.accountId}:${senderId}`,
       security.rateLimitPerMinutePerSender,
     );
     if (!allowed) {
-      runtime.log?.(`test: drop sender ${senderId} (rate limited)`);
+      runtime.log?.(`vimalinx: drop sender ${senderId} (rate limited)`);
       return;
     }
   }
@@ -205,11 +205,11 @@ export async function handleTestInbound(params: {
   });
 
   if (isGroup && !groupMatch.allowed) {
-    runtime.log?.(`test: drop group ${chatId} (not allowlisted)`);
+    runtime.log?.(`vimalinx: drop group ${chatId} (not allowlisted)`);
     return;
   }
   if (groupMatch.groupConfig?.enabled === false) {
-    runtime.log?.(`test: drop group ${chatId} (disabled)`);
+    runtime.log?.(`vimalinx: drop group ${chatId} (disabled)`);
     return;
   }
 
@@ -265,12 +265,12 @@ export async function handleTestInbound(params: {
       senderName,
     });
     if (!groupAllow.allowed) {
-      runtime.log?.(`test: drop group sender ${senderId} (policy=${groupPolicy})`);
+      runtime.log?.(`vimalinx: drop group sender ${senderId} (policy=${groupPolicy})`);
       return;
     }
   } else {
     if (dmPolicy === "disabled") {
-      runtime.log?.(`test: drop DM sender=${senderId} (dmPolicy=disabled)`);
+      runtime.log?.(`vimalinx: drop DM sender=${senderId} (dmPolicy=disabled)`);
       return;
     }
     if (dmPolicy !== "open") {
@@ -292,7 +292,7 @@ export async function handleTestInbound(params: {
                 to: chatId,
                 text: core.channel.pairing.buildPairingReply({
                   channel: CHANNEL_ID,
-                  idLine: `Your test user id: ${senderId}`,
+                  idLine: `Your vimalinx user id: ${senderId}`,
                   code,
                 }),
                 cfg: config,
@@ -300,11 +300,11 @@ export async function handleTestInbound(params: {
               });
               statusSink?.({ lastOutboundAt: Date.now() });
             } catch (err) {
-              runtime.error?.(`test: pairing reply failed for ${senderId}: ${String(err)}`);
+              runtime.error?.(`vimalinx: pairing reply failed for ${senderId}: ${String(err)}`);
             }
           }
         }
-        runtime.log?.(`test: drop DM sender ${senderId} (dmPolicy=${dmPolicy})`);
+        runtime.log?.(`vimalinx: drop DM sender ${senderId} (dmPolicy=${dmPolicy})`);
         return;
       }
     }
@@ -326,7 +326,7 @@ export async function handleTestInbound(params: {
     commandAuthorized,
   });
   if (isGroup && mentionGate.shouldSkip) {
-    runtime.log?.(`test: drop group ${chatId} (no mention)`);
+    runtime.log?.(`vimalinx: drop group ${chatId} (no mention)`);
     return;
   }
 
@@ -357,7 +357,7 @@ export async function handleTestInbound(params: {
     sessionKey: route.sessionKey,
   });
   const body = core.channel.reply.formatAgentEnvelope({
-    channel: "Test",
+    channel: "Vimalinx",
     from: fromLabel,
     timestamp,
     previousTimestamp,
@@ -371,8 +371,8 @@ export async function handleTestInbound(params: {
     Body: body,
     RawBody: rawBody,
     CommandBody: rawBody,
-    From: isGroup ? `test:group:${chatId}` : `test:${senderId}`,
-    To: `test:${chatId}`,
+    From: isGroup ? `vimalinx:group:${chatId}` : `vimalinx:${senderId}`,
+    To: `vimalinx:${chatId}`,
     SessionKey: route.sessionKey,
     AccountId: route.accountId,
     ChatType: isGroup ? "group" : "direct",
@@ -388,7 +388,7 @@ export async function handleTestInbound(params: {
     ReplyToId: message.id,
     Timestamp: timestamp,
     OriginatingChannel: CHANNEL_ID,
-    OriginatingTo: `test:${chatId}`,
+    OriginatingTo: `vimalinx:${chatId}`,
     CommandAuthorized: commandAuthorized,
   });
 
@@ -397,7 +397,7 @@ export async function handleTestInbound(params: {
     sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
     ctx: ctxPayload,
     onRecordError: (err) => {
-      runtime.error?.(`test: failed updating session meta: ${String(err)}`);
+      runtime.error?.(`vimalinx: failed updating session meta: ${String(err)}`);
     },
   });
 
@@ -420,7 +420,7 @@ export async function handleTestInbound(params: {
         });
       },
       onError: (err, info) => {
-        runtime.error?.(`test ${info.kind} reply failed: ${String(err)}`);
+        runtime.error?.(`vimalinx ${info.kind} reply failed: ${String(err)}`);
       },
     },
   });

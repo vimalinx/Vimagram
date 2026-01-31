@@ -62,6 +62,7 @@ import com.clawdbot.android.BuildConfig
 import com.clawdbot.android.LocationMode
 import com.clawdbot.android.MainViewModel
 import com.clawdbot.android.NodeForegroundService
+import com.clawdbot.android.UpdateStatus
 import com.clawdbot.android.VoiceWakeMode
 import com.clawdbot.android.WakeWords
 
@@ -101,6 +102,7 @@ fun SettingsSheet(viewModel: MainViewModel) {
         .trim()
         .ifEmpty { "Android" }
     }
+  val updateState by viewModel.updateState.collectAsState()
   val appVersion =
     remember {
       val versionName = BuildConfig.VERSION_NAME.trim().ifEmpty { "dev" }
@@ -279,6 +281,55 @@ fun SettingsSheet(viewModel: MainViewModel) {
     item { Text("Instance ID: $instanceId", color = MaterialTheme.colorScheme.onSurfaceVariant) }
     item { Text("Device: $deviceModel", color = MaterialTheme.colorScheme.onSurfaceVariant) }
     item { Text("Version: $appVersion", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    item {
+      ListItem(
+        headlineContent = { Text("Update") },
+        supportingContent = {
+          val statusText =
+            when (updateState.status) {
+              UpdateStatus.Idle -> "Check for the latest GitHub release."
+              UpdateStatus.Checking -> "Checking…"
+              UpdateStatus.Ready -> if (updateState.isUpdateAvailable) "New version available" else "Up to date"
+              UpdateStatus.Error -> updateState.error ?: "Update check failed"
+            }
+          Text(statusText)
+        },
+        trailingContent = {
+          val checking = updateState.status == UpdateStatus.Checking
+          Button(onClick = viewModel::checkForUpdates, enabled = !checking) {
+            Text(if (checking) "Checking" else "Check")
+          }
+        },
+      )
+    }
+    if (updateState.status == UpdateStatus.Ready && updateState.isUpdateAvailable) {
+      val htmlUrl = updateState.htmlUrl
+      val notes = updateState.releaseNotes?.take(1200).orEmpty()
+      item {
+        ListItem(
+          headlineContent = {
+            Text(updateState.latestName ?: updateState.latestTag ?: "New release")
+          },
+          supportingContent = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              Text("Tap to view the release on GitHub.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+              if (notes.isNotBlank()) {
+                Text(notes, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+            }
+          },
+          trailingContent = {
+            Button(onClick = {
+              if (!htmlUrl.isNullOrBlank()) {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(htmlUrl)))
+              }
+            }) {
+              Text("View")
+            }
+          },
+        )
+      }
+    }
 
     item { HorizontalDivider() }
 

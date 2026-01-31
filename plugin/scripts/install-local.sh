@@ -3,11 +3,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-TARGET_DIR="${TEST_PLUGIN_DIR:-$HOME/.clawdbot/extensions/test}"
-LEGACY_DIR="$HOME/.clawdbot/extensions/vimalinx-server-plugin"
+TARGET_DIR="${TEST_PLUGIN_DIR:-$HOME/.openclaw/extensions/vimalinx}"
 
-if ! command -v clawdbot >/dev/null 2>&1; then
-  echo "clawdbot not found in PATH. Install the official package first." >&2
+if ! command -v openclaw >/dev/null 2>&1; then
+  echo "openclaw not found in PATH. Install the official package first." >&2
   exit 1
 fi
 
@@ -21,13 +20,12 @@ rsync -a --delete "${PLUGIN_DIR}/" "${TARGET_DIR}/"
 cd "${TARGET_DIR}"
 npm install --omit=dev
 
-clawdbot plugins install "${TARGET_DIR}"
-clawdbot plugins enable test >/dev/null 2>&1 || true
+openclaw plugins install "${TARGET_DIR}"
 
 cat <<'EOF'
 Done.
 Next:
-  1) Run: clawdbot quickstart
+  1) Run: openclaw quickstart
   2) Select Vimalinx Server
   3) Paste the token (server URL uses the default)
 EOF

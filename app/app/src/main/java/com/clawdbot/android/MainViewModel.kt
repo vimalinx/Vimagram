@@ -52,6 +52,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
   val manualPort: StateFlow<Int> = runtime.manualPort
   val manualTls: StateFlow<Boolean> = runtime.manualTls
   val canvasDebugStatusEnabled: StateFlow<Boolean> = runtime.canvasDebugStatusEnabled
+  val updateState: StateFlow<UpdateState> = runtime.updateState
 
   val chatSessionKey: StateFlow<String> = runtime.chatSessionKey
   val chatSessionId: StateFlow<String?> = runtime.chatSessionId
@@ -126,6 +127,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
   fun refreshGatewayConnection() {
     runtime.refreshGatewayConnection()
+  }
+
+  fun checkForUpdates() {
+    runtime.checkForUpdates()
   }
 
   fun connect(endpoint: GatewayEndpoint) {

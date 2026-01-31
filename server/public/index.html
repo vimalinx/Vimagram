@@ -496,7 +496,7 @@
           <div class="register-title">Local Config</div>
           <pre class="config-snippet" id="configSnippet">Connect or register to view config.</pre>
           <button id="copyConfig">Copy config</button>
-          <div class="register-hint" id="configHint">Paste into ~/.clawdbot/clawdbot.json</div>
+          <div class="register-hint" id="configHint">Paste into ~/.openclaw/openclaw.json</div>
         </div>
 
         <div class="chat-list">
@@ -725,7 +725,7 @@
           return;
         }
         const baseUrl = window.location.origin;
-        configSnippetEl.textContent = `channels: {\n  test: {\n    enabled: true,\n    baseUrl: \"${baseUrl}\",\n    token: \"${token}\",\n    userId: \"${userId}\",\n    inboundMode: \"poll\",\n    dmPolicy: \"open\",\n    allowFrom: [\"*\"]\n  }\n}`;
+        configSnippetEl.textContent = `channels: {\n  vimalinx: {\n    enabled: true,\n    baseUrl: \"${baseUrl}\",\n    token: \"${token}\",\n    userId: \"${userId}\",\n    inboundMode: \"poll\",\n    dmPolicy: \"open\",\n    allowFrom: [\"*\"]\n  }\n}`;
       }
 
       function connect() {
@@ -826,7 +826,7 @@
           await navigator.clipboard.writeText(text);
           configHintEl.textContent = "Copied!";
           setTimeout(() => {
-            configHintEl.textContent = "Paste into ~/.clawdbot/clawdbot.json";
+      configHintEl.textContent = "Paste into ~/.openclaw/openclaw.json";
           }, 1500);
         } catch {
           configHintEl.textContent = "Copy failed";

@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import type { ClawdbotConfig, PluginRuntime } from "clawdbot/plugin-sdk";
+import type { ClawdbotConfig, PluginRuntime } from "openclaw/plugin-sdk";
 
 import type { TestAccountConfig } from "./types.js";
 
@@ -23,18 +23,18 @@ function resolveAllowFrom(existing: unknown): Array<string | number> {
   return ["*"];
 }
 
-export function registerTestCli(params: {
+export function registerVimalinxCli(params: {
   program: Command;
   runtime: PluginRuntime;
   logger: Logger;
 }) {
   const { program, runtime, logger } = params;
-  const root = program.command("test").description("Vimalinx Server channel utilities");
+  const root = program.command("vimalinx").description("Vimalinx Server channel utilities");
 
   root
     .command("register")
-    .description("Register a test user and update local config")
-    .requiredOption("--server <url>", "Server base URL, e.g. https://vimagram.vimalinx.xyz")
+    .description("Register a Vimalinx user and update local config")
+    .requiredOption("--server <url>", "Server base URL, e.g. http://1.2.3.4:8788")
     .requiredOption("--password <password>", "Account password (6-64 chars)")
     .option("--user <id>", "User id (optional)")
     .option("--name <name>", "Display name (optional)")
@@ -99,9 +99,9 @@ export function registerTestCli(params: {
 
         const cfg = runtime.config.loadConfig() as ClawdbotConfig;
         const channels = (cfg.channels ?? {}) as Record<string, unknown>;
-        const existing = (channels.test ?? {}) as TestAccountConfig;
+        const existing = (channels.vimalinx ?? {}) as TestAccountConfig;
 
-        const nextTest = {
+        const nextVimalinx = {
           ...existing,
           enabled: true,
           baseUrl: serverUrl,
@@ -114,22 +114,22 @@ export function registerTestCli(params: {
 
         const plugins = (cfg.plugins ?? {}) as Record<string, unknown>;
         const entries = (plugins.entries ?? {}) as Record<string, unknown>;
-        const currentTest = (entries["test"] ?? {}) as Record<string, unknown>;
+        const currentTest = (entries["vimalinx"] ?? {}) as Record<string, unknown>;
 
         await runtime.config.writeConfigFile({
           ...cfg,
-          channels: { ...channels, test: nextTest },
+          channels: { ...channels, vimalinx: nextVimalinx },
           plugins: {
             ...plugins,
             entries: {
               ...entries,
-              test: { ...currentTest, enabled: true },
+              vimalinx: { ...currentTest, enabled: true },
             },
           },
         });
 
-        logger.info?.(`Registered "${registerData.userId}" and updated config.`);
-        logger.info?.("Restart: clawdbot gateway restart");
+        logger.info?.(`Registered "${data.userId}" and updated config.`);
+        logger.info?.("Restart: openclaw gateway restart");
       },
     );
 }

@@ -28,6 +28,8 @@ For a release build:
 ./gradlew :app:assembleRelease
 ```
 
+Latest APKs are published on GitHub Releases: <https://github.com/vimalinx/vimalinx-suite-core/releases>
+
 `gradlew` auto-detects the Android SDK at `~/Library/Android/sdk` (macOS default) if
 `ANDROID_SDK_ROOT` / `ANDROID_HOME` are unset.
 

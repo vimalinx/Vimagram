@@ -16,7 +16,7 @@ import {
 } from "./security.js";
 import type { TestConfig, TestInboundMessage, TestInboundPayload } from "./types.js";
 
-const DEFAULT_WEBHOOK_PATH = "/test-webhook";
+const DEFAULT_WEBHOOK_PATH = "/vimalinx-webhook";
 const DEFAULT_POLL_INTERVAL_MS = 1500;
 const DEFAULT_POLL_WAIT_MS = 20000;
 const MAX_POLL_WAIT_MS = 30000;
@@ -122,7 +122,7 @@ function readTokenFromHeaders(req: IncomingMessage): string | undefined {
   if (authHeader.toLowerCase().startsWith("bearer ")) {
     return authHeader.slice("bearer ".length).trim();
   }
-  const direct = req.headers["x-test-token"];
+  const direct = req.headers["x-vimalinx-token"];
   return typeof direct === "string" ? direct.trim() : undefined;
 }
 
@@ -209,9 +209,9 @@ async function pollServerOnce(params: {
       nonce,
       body: "",
     });
-    headers["x-test-timestamp"] = String(timestamp);
-    headers["x-test-nonce"] = nonce;
-    headers["x-test-signature"] = signature;
+    headers["x-vimalinx-timestamp"] = String(timestamp);
+    headers["x-vimalinx-nonce"] = nonce;
+    headers["x-vimalinx-signature"] = signature;
   }
 
   const controller = new AbortController();
@@ -255,12 +255,12 @@ async function startTestPoller(params: {
 }): Promise<() => void> {
   const baseUrl = params.account.baseUrl;
   if (!baseUrl) {
-    params.runtime.error?.("test poller: baseUrl is not configured.");
+    params.runtime.error?.("vimalinx poller: baseUrl is not configured.");
     return () => {};
   }
   const security = resolveTestSecurityConfig(params.account.config.security);
   if (security.requireHttps && !isHttpsUrl(baseUrl)) {
-    params.runtime.error?.("test poller: baseUrl must use https when requireHttps is enabled.");
+    params.runtime.error?.("vimalinx poller: baseUrl must use https when requireHttps is enabled.");
     return () => {};
   }
   const userId = resolveUserId(params.account);
@@ -269,7 +269,7 @@ async function startTestPoller(params: {
   const pollWaitMs = resolvePollWaitMs(params.account);
 
   params.runtime.log?.(
-    `test poller: user=${userId} wait=${pollWaitMs}ms interval=${pollIntervalMs}ms`,
+    `vimalinx poller: user=${userId} wait=${pollWaitMs}ms interval=${pollIntervalMs}ms`,
   );
 
   let stopped = false;
@@ -304,7 +304,7 @@ async function startTestPoller(params: {
         }
       } catch (err) {
         if (!params.abortSignal.aborted && !stopped) {
-          params.runtime.error?.(`test poller: ${String(err)}`);
+          params.runtime.error?.(`vimalinx poller: ${String(err)}`);
           await delay(pollIntervalMs);
         }
       }
@@ -405,7 +405,7 @@ export async function handleTestWebhookRequest(
     return true;
   }
 
-  if (!checkGlobalRateLimit(`test:${target.account.accountId}:${requestIp ?? "unknown"}`, security.rateLimitPerMinute)) {
+  if (!checkGlobalRateLimit(`vimalinx:${target.account.accountId}:${requestIp ?? "unknown"}`, security.rateLimitPerMinute)) {
     res.statusCode = 429;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ error: "Rate limited" }));
@@ -436,9 +436,9 @@ export async function handleTestWebhookRequest(
       res.end(JSON.stringify({ error: "Signature required" }));
       return true;
     }
-    const timestampHeader = String(req.headers["x-test-timestamp"] ?? "").trim();
-    const nonce = String(req.headers["x-test-nonce"] ?? "").trim();
-    const signature = String(req.headers["x-test-signature"] ?? "").trim();
+    const timestampHeader = String(req.headers["x-vimalinx-timestamp"] ?? "").trim();
+    const nonce = String(req.headers["x-vimalinx-nonce"] ?? "").trim();
+    const signature = String(req.headers["x-vimalinx-signature"] ?? "").trim();
     const timestamp = Number(timestampHeader);
     const now = Date.now();
     if (!timestampHeader || !nonce || !signature || !Number.isFinite(timestamp)) {
@@ -483,7 +483,7 @@ export async function handleTestWebhookRequest(
   }
 
   if (!checkSenderRateLimit(
-    `test:${target.account.accountId}:${message.senderId}`,
+    `vimalinx:${target.account.accountId}:${message.senderId}`,
     security.rateLimitPerMinutePerSender,
   )) {
     res.statusCode = 429;
@@ -504,7 +504,7 @@ export async function handleTestWebhookRequest(
     statusSink: target.statusSink,
     rateLimitChecked: true,
   }).catch((err) => {
-    target.runtime.error?.(`test inbound failed: ${String(err)}`);
+    target.runtime.error?.(`vimalinx inbound failed: ${String(err)}`);
   });
 
   return true;

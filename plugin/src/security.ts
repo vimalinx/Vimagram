@@ -17,7 +17,7 @@ type ResolvedTestSecurityConfig = {
 };
 
 const DEFAULTS = {
-  requireHttps: true,
+  requireHttps: false,
   allowTokenInQuery: false,
   timestampSkewMs: 5 * 60 * 1000,
   rateLimitPerMinute: 120,
@@ -34,7 +34,7 @@ export function resolveTestSecurityConfig(raw?: TestSecurityConfig): ResolvedTes
   const requireSignature =
     typeof raw?.requireSignature === "boolean" ? raw.requireSignature : Boolean(secret);
   return {
-    requireHttps: raw?.requireHttps !== false,
+    requireHttps: raw?.requireHttps === true,
     allowTokenInQuery: raw?.allowTokenInQuery === true,
     hmacSecret: secret || undefined,
     requireSignature,

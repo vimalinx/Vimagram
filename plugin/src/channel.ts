@@ -10,7 +10,7 @@ import {
   type ChannelGroupContext,
   type ChannelPlugin,
   type ClawdbotConfig,
-} from "clawdbot/plugin-sdk";
+} from "openclaw/plugin-sdk";
 import {
   listTestAccountIds,
   resolveDefaultTestAccountId,
@@ -19,13 +19,13 @@ import {
 } from "./accounts.js";
 import { normalizeTestAllowEntry, normalizeTestAllowlist } from "./allowlist.js";
 import { startTestMonitor } from "./monitor.js";
-import { testOnboardingAdapter } from "./onboarding.js";
+import { vimalinxOnboardingAdapter } from "./onboarding.js";
 import { sendTestMessage } from "./send.js";
 import type { TestConfig, TestGroupConfig } from "./types.js";
 import { getTestRuntime } from "./runtime.js";
 
 const meta = {
-  id: "test",
+  id: "vimalinx",
   label: "Vimalinx Server",
   selectionLabel: "Vimalinx Server (custom)",
   detailLabel: "Vimalinx Server",
@@ -77,8 +77,8 @@ function normalizeTestMessagingTarget(raw: string): string | undefined {
   let normalized = raw.trim();
   if (!normalized) return undefined;
   const lowered = normalized.toLowerCase();
-  if (lowered.startsWith("test:")) {
-    normalized = normalized.slice("test:".length).trim();
+  if (lowered.startsWith("vimalinx:")) {
+    normalized = normalized.slice("vimalinx:".length).trim();
   }
   return normalized || undefined;
 }
@@ -87,12 +87,12 @@ function looksLikeTestTargetId(value: string): boolean {
   return Boolean(value.trim());
 }
 
-export const testPlugin: ChannelPlugin<ResolvedTestAccount> = {
-  id: "test",
+export const vimalinxPlugin: ChannelPlugin<ResolvedTestAccount> = {
+  id: "vimalinx",
   meta: { ...meta },
-  onboarding: testOnboardingAdapter,
+  onboarding: vimalinxOnboardingAdapter,
   pairing: {
-    idLabel: "testUserId",
+    idLabel: "vimalinxUserId",
     normalizeAllowEntry: (entry) => normalizeTestAllowEntry(entry),
     notifyApproval: async ({ cfg, id }) => {
       await sendTestMessage({
@@ -105,7 +105,7 @@ export const testPlugin: ChannelPlugin<ResolvedTestAccount> = {
   capabilities: {
     chatTypes: ["direct", "group"],
   },
-  reload: { configPrefixes: ["channels.test"] },
+  reload: { configPrefixes: ["channels.vimalinx"] },
   config: {
     listAccountIds: (cfg) => listTestAccountIds(cfg as TestConfig),
     resolveAccount: (cfg, accountId) => resolveTestAccount({ cfg: cfg as TestConfig, accountId }),
@@ -113,7 +113,7 @@ export const testPlugin: ChannelPlugin<ResolvedTestAccount> = {
     setAccountEnabled: ({ cfg, accountId, enabled }) =>
       setAccountEnabledInConfigSection({
         cfg,
-        sectionKey: "test",
+        sectionKey: "vimalinx",
         accountId,
         enabled,
         allowTopLevel: true,
@@ -121,7 +121,7 @@ export const testPlugin: ChannelPlugin<ResolvedTestAccount> = {
     deleteAccount: ({ cfg, accountId }) =>
       deleteAccountFromConfigSection({
         cfg,
-        sectionKey: "test",
+        sectionKey: "vimalinx",
         accountId,
         clearBaseFields: [
           "name",
@@ -156,17 +156,17 @@ export const testPlugin: ChannelPlugin<ResolvedTestAccount> = {
     resolveDmPolicy: ({ cfg, accountId, account }) => {
       const resolvedAccountId = accountId ?? account.accountId ?? DEFAULT_ACCOUNT_ID;
       const useAccountPath = Boolean(
-        (cfg as ClawdbotConfig).channels?.test?.accounts?.[resolvedAccountId],
+        (cfg as ClawdbotConfig).channels?.vimalinx?.accounts?.[resolvedAccountId],
       );
       const basePath = useAccountPath
-        ? `channels.test.accounts.${resolvedAccountId}.`
-        : "channels.test.";
+        ? `channels.vimalinx.accounts.${resolvedAccountId}.`
+        : "channels.vimalinx.";
       return {
         policy: account.config.dmPolicy ?? "pairing",
         allowFrom: account.config.allowFrom ?? [],
         policyPath: `${basePath}dmPolicy`,
         allowFromPath: basePath,
-        approveHint: formatPairingApproveHint("test"),
+        approveHint: formatPairingApproveHint("vimalinx"),
         normalizeEntry: (raw) => normalizeTestAllowEntry(raw),
       };
     },
@@ -175,7 +175,7 @@ export const testPlugin: ChannelPlugin<ResolvedTestAccount> = {
       const groupPolicy = account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
       if (groupPolicy !== "open") return [];
       return [
-        "- Vimalinx Server groups: groupPolicy=\"open\" allows any member to trigger (mention-gated). Set channels.test.groupPolicy=\"allowlist\" + channels.test.groupAllowFrom to restrict senders.",
+        "- Vimalinx Server groups: groupPolicy=\"open\" allows any member to trigger (mention-gated). Set channels.vimalinx.groupPolicy=\"allowlist\" + channels.vimalinx.groupAllowFrom to restrict senders.",
       ];
     },
   },
@@ -255,7 +255,7 @@ export const testPlugin: ChannelPlugin<ResolvedTestAccount> = {
     applyAccountName: ({ cfg, accountId, name }) =>
       applyAccountNameToChannelSection({
         cfg,
-        channelKey: "test",
+        channelKey: "vimalinx",
         accountId,
         name,
       }),
@@ -267,13 +267,13 @@ export const testPlugin: ChannelPlugin<ResolvedTestAccount> = {
       return null;
     },
     applyAccountConfig: ({ cfg, accountId, input }) => {
-      let next = migrateBaseNameToDefaultAccount(cfg, "test", accountId);
+      let next = migrateBaseNameToDefaultAccount(cfg, "vimalinx", accountId);
       const url = input.url?.trim() || input.httpUrl?.trim();
       const token = input.token?.trim();
       const webhookPath = input.webhookPath?.trim();
       next = applyAccountNameToChannelSection({
         cfg: next,
-        channelKey: "test",
+        channelKey: "vimalinx",
         accountId,
         name: input.name,
       });
@@ -282,8 +282,8 @@ export const testPlugin: ChannelPlugin<ResolvedTestAccount> = {
           ...next,
           channels: {
             ...next.channels,
-            test: {
-              ...next.channels?.test,
+            vimalinx: {
+              ...next.channels?.vimalinx,
               enabled: true,
               ...(url ? { baseUrl: url } : {}),
               ...(token ? { token } : {}),
@@ -296,13 +296,13 @@ export const testPlugin: ChannelPlugin<ResolvedTestAccount> = {
         ...next,
         channels: {
           ...next.channels,
-          test: {
-            ...next.channels?.test,
+          vimalinx: {
+            ...next.channels?.vimalinx,
             enabled: true,
             accounts: {
-              ...next.channels?.test?.accounts,
+              ...next.channels?.vimalinx?.accounts,
               [accountId]: {
-                ...next.channels?.test?.accounts?.[accountId],
+                ...next.channels?.vimalinx?.accounts?.[accountId],
                 enabled: true,
                 ...(url ? { baseUrl: url } : {}),
                 ...(token ? { token } : {}),

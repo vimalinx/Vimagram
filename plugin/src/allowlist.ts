@@ -5,7 +5,7 @@ export type AllowlistMatch = {
 };
 
 export function normalizeTestAllowEntry(raw: string): string {
-  return raw.trim().toLowerCase().replace(/^test:/i, "");
+  return raw.trim().toLowerCase().replace(/^vimalinx:/i, "");
 }
 
 export function normalizeTestAllowlist(values: Array<string | number> | undefined): string[] {

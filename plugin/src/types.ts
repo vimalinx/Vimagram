@@ -1,4 +1,4 @@
-import type { DmPolicy, GroupPolicy } from "clawdbot/plugin-sdk";
+import type { DmPolicy, GroupPolicy } from "openclaw/plugin-sdk";
 
 export type TestGroupConfig = {
   requireMention?: boolean;
@@ -43,7 +43,7 @@ export type TestAccountConfig = {
 
 export type TestConfig = {
   channels?: {
-    test?: TestAccountConfig & {
+    vimalinx?: TestAccountConfig & {
       accounts?: Record<string, TestAccountConfig>;
     };
   };

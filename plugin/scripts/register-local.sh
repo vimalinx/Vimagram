@@ -7,7 +7,7 @@ DISPLAY_NAME="${TEST_DISPLAY_NAME:-}"
 PASSWORD="${TEST_PASSWORD:-}"
 INVITE_CODE="${TEST_INVITE_CODE:-}"
 SERVER_TOKEN="${TEST_SERVER_TOKEN:-}"
-CONFIG_PATH="${TEST_CONFIG_PATH:-$HOME/.clawdbot/clawdbot.json}"
+CONFIG_PATH="${TEST_CONFIG_PATH:-$HOME/.openclaw/openclaw.json}"
 
 usage() {
   cat <<'EOF'
@@ -149,7 +149,7 @@ channels = config.get("channels")
 if not isinstance(channels, dict):
   channels = {}
 
-test_cfg = channels.get("test")
+test_cfg = channels.get("vimalinx")
 if not isinstance(test_cfg, dict):
   test_cfg = {}
 
@@ -163,7 +163,7 @@ test_cfg.update({
   "allowFrom": ["*"],
 })
 
-channels["test"] = test_cfg
+channels["vimalinx"] = test_cfg
 config["channels"] = channels
 
 plugins = config.get("plugins")
@@ -172,12 +172,11 @@ if not isinstance(plugins, dict):
 entries = plugins.get("entries")
 if not isinstance(entries, dict):
   entries = {}
-entries.pop("vimalinx-server-plugin", None)
-test_entry = entries.get("test")
+test_entry = entries.get("vimalinx")
 if not isinstance(test_entry, dict):
   test_entry = {}
 test_entry["enabled"] = True
-entries["test"] = test_entry
+entries["vimalinx"] = test_entry
 plugins["entries"] = entries
 config["plugins"] = plugins
 
@@ -188,5 +187,5 @@ with open(config_path, "w", encoding="utf-8") as f:
 
 print("Registered user:", registered_user)
 print("Updated config:", config_path)
-print("Restart: clawdbot gateway restart")
+print("Restart: openclaw gateway restart")
 PY
