@@ -10,6 +10,13 @@ SERVER_URL="${VIMALINX_SERVER_URL:-}"
 TOKEN="${VIMALINX_TOKEN:-}"
 INBOUND_MODE="${VIMALINX_INBOUND_MODE:-poll}"
 
+# Clean up installs from older layouts/names.
+LEGACY_DIRS=(
+  "$HOME/.clawdbot/extensions/vimalinx"
+  "$HOME/.openclaw/extensions/vimalinx-server-plugin"
+  "$HOME/.clawdbot/extensions/vimalinx-server-plugin"
+)
+
 if ! command -v openclaw >/dev/null 2>&1; then
   echo "openclaw not found in PATH. Install the CLI first." >&2
   exit 1
@@ -55,9 +62,11 @@ PY
 fi
 
 echo "Installing Vimalinx Server plugin to: ${TARGET_DIR}"
-if [[ -d "${LEGACY_DIR}" && "${LEGACY_DIR}" != "${TARGET_DIR}" ]]; then
-  rm -rf "${LEGACY_DIR}"
-fi
+for legacy_dir in "${LEGACY_DIRS[@]}"; do
+  if [[ -d "${legacy_dir}" && "${legacy_dir}" != "${TARGET_DIR}" ]]; then
+    rm -rf "${legacy_dir}"
+  fi
+done
 if [[ -d "${TARGET_DIR}" ]]; then
   if [[ "${TARGET_DIR}" == "${HOME}/.openclaw/extensions/vimalinx" || "${TARGET_DIR}" == "${HOME}/.clawdbot/extensions/vimalinx" || "${VIMALINX_FORCE_OVERWRITE:-}" == "1" ]]; then
     rm -rf "${TARGET_DIR}"
