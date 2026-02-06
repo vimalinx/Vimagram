@@ -11,6 +11,7 @@ import com.clawdbot.android.UpdateState
 import com.clawdbot.android.UpdateStatus
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.sse.EventSource
@@ -38,6 +40,8 @@ data class TestChatUiState(
   val isAuthenticated: Boolean = false,
   val connectionState: TestChatConnectionState = TestChatConnectionState.Disconnected,
   val errorText: String? = null,
+  val lastConnectionError: String? = null,
+  val lastRequestId: String? = null,
   val inviteRequired: Boolean? = null,
   val serverTestMessage: String? = null,
   val serverTestSuccess: Boolean? = null,
@@ -59,6 +63,34 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   private fun appString(@StringRes id: Int, vararg args: Any): String {
     return getApplication<Application>().getString(id, *args)
   }
+
+  private fun rememberRequestId(requestId: String?) {
+    if (!requestId.isNullOrBlank()) {
+      _lastRequestId.value = requestId
+    }
+  }
+
+  private fun formatAuthError(error: String?, requestId: String?, @StringRes fallbackRes: Int): String {
+    val normalized = error?.trim().orEmpty()
+    val base = when {
+      normalized.equals("unauthorized", ignoreCase = true) || normalized.contains("HTTP 401") ->
+        appString(R.string.error_unauthorized)
+      normalized.contains("HTTP 403") -> appString(R.string.error_forbidden)
+      normalized.contains("HTTP 429") || normalized.contains("rate limited", ignoreCase = true) ->
+        appString(R.string.error_rate_limited)
+      normalized.contains("HTTP 400") -> appString(R.string.error_bad_request)
+      normalized.contains("invalid invite", ignoreCase = true) -> appString(R.string.error_invite_invalid)
+      normalized.contains("registration disabled", ignoreCase = true) ->
+        appString(R.string.error_register_disabled)
+      normalized.isNotBlank() -> normalized
+      else -> appString(fallbackRes)
+    }
+    return if (!requestId.isNullOrBlank()) {
+      appString(R.string.error_with_request_id, base, requestId)
+    } else {
+      base
+    }
+  }
   private val json = Json { ignoreUnknownKeys = true }
   private val client =
     TestServerClient(
@@ -79,13 +111,19 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   private val _hosts = MutableStateFlow(prefs.hosts.value)
   private val _languageTag = MutableStateFlow(prefs.languageTag.value)
   private val _disclaimerAccepted = MutableStateFlow(prefs.disclaimerAccepted.value)
+  private val _publicChannelEnabled = MutableStateFlow(prefs.publicChannelEnabled.value)
+  private val _publicChannelId = MutableStateFlow(prefs.publicChannelId.value)
+  private val _publicChannelName = MutableStateFlow(prefs.publicChannelName.value)
   private val _connectionState = MutableStateFlow(TestChatConnectionState.Disconnected)
   private val _errorText = MutableStateFlow<String?>(null)
+  private val _lastConnectionError = MutableStateFlow<String?>(null)
+  private val _lastRequestId = MutableStateFlow<String?>(null)
   private val _snapshot = MutableStateFlow(TestChatSnapshot())
   private val _activeChatId = MutableStateFlow<String?>(null)
   private val _isInForeground = MutableStateFlow(true)
   private val _tokenUsage = MutableStateFlow<Map<String, TestChatTokenUsage>>(emptyMap())
   private val _inviteRequired = MutableStateFlow<Boolean?>(null)
+  private val _serverConfig = MutableStateFlow(TestServerConfigState())
   private val _serverTestMessage = MutableStateFlow<String?>(null)
   private val _serverTestSuccess = MutableStateFlow<Boolean?>(null)
   private val _serverTestInProgress = MutableStateFlow(false)
@@ -109,19 +147,40 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
       _snapshot,
       _activeChatId,
     ) { auth, connectionState, errorText, snapshot, activeChatId ->
-      UiStateParts(auth, connectionState, errorText, snapshot, activeChatId)
+      UiStateParts(
+        auth = auth,
+        connectionState = connectionState,
+        errorText = errorText,
+        lastConnectionError = null,
+        lastRequestId = null,
+        snapshot = snapshot,
+        activeChatId = activeChatId,
+      )
     }
 
   private val uiStateExtras =
     combine(
       baseUiState,
+      _lastConnectionError,
+      _lastRequestId,
       _tokenUsage,
       _inviteRequired,
       _serverTestMessage,
       _serverTestSuccess,
-    ) { base, tokenUsage, inviteRequired, serverTestMessage, serverTestSuccess ->
+    ) { values ->
+      val base = values[0] as UiStateParts
+      val lastConnectionError = values[1] as String?
+      val lastRequestId = values[2] as String?
+      val tokenUsage = values[3] as Map<String, TestChatTokenUsage>
+      val inviteRequired = values[4] as Boolean?
+      val serverTestMessage = values[5] as String?
+      val serverTestSuccess = values[6] as Boolean?
       UiStateExtras(
-        base = base,
+        base =
+          base.copy(
+            lastConnectionError = lastConnectionError,
+            lastRequestId = lastRequestId,
+          ),
         tokenUsage = tokenUsage,
         inviteRequired = inviteRequired,
         serverTestMessage = serverTestMessage,
@@ -151,6 +210,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
         isAuthenticated = isAuthenticated,
         connectionState = base.connectionState,
         errorText = base.errorText,
+        lastConnectionError = base.lastConnectionError,
+        lastRequestId = base.lastRequestId,
         inviteRequired = extras.inviteRequired,
         serverTestMessage = extras.serverTestMessage,
         serverTestSuccess = extras.serverTestSuccess,
@@ -164,10 +225,14 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
 
   val languageTag: StateFlow<String> = _languageTag
   val disclaimerAccepted: StateFlow<Boolean> = _disclaimerAccepted
+  val publicChannelEnabled: StateFlow<Boolean> = _publicChannelEnabled
+  val publicChannelId: StateFlow<String> = _publicChannelId
+  val publicChannelName: StateFlow<String> = _publicChannelName
   val serverConfig: StateFlow<TestServerConfigState> = _serverConfig
   val serverTestMessage: StateFlow<String?> = _serverTestMessage
 
   init {
+    ensurePublicDefaults()
     val account = _account.value
     val password = _password.value
     if (account != null && !password.isNullOrBlank()) {
@@ -196,10 +261,10 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     val normalizedUser = userId.trim()
     val normalizedInvite = inviteCode.trim()
     val normalizedPassword = password.trim()
-    val inviteRequired = _inviteRequired.value == true
+    val inviteRequiredFlag = _inviteRequired.value == true
     if (
       normalizedUser.isBlank() ||
-        (inviteRequired && normalizedInvite.isBlank()) ||
+        (inviteRequiredFlag && normalizedInvite.isBlank()) ||
         normalizedPassword.length < 6
     ) {
       _errorText.value = appString(R.string.error_register_required)
@@ -230,7 +295,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
           }
       val userId = response.userId?.trim().orEmpty()
       if (response.ok != true || userId.isBlank()) {
-        _errorText.value = response.error ?: appString(R.string.error_register_failed)
+        rememberRequestId(response.requestId)
+        _errorText.value = formatAuthError(response.error, response.requestId, R.string.error_register_failed)
         return@launch
       }
       val account = TestChatAccount(serverUrl = normalizedServer, userId = userId)
@@ -359,8 +425,10 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
             return@launch
           }
       val token = response.token?.trim().orEmpty()
-      if (response.ok != true || token.isBlank()) {
-        _errorText.value = response.error ?: appString(R.string.error_token_request_failed)
+    if (response.ok != true || token.isBlank()) {
+        rememberRequestId(response.requestId)
+        _errorText.value =
+          formatAuthError(response.error, response.requestId, R.string.error_token_request_failed)
         return@launch
       }
       val host = TestChatHost(label = normalizedLabel, token = token)
@@ -393,6 +461,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     _snapshot.value = TestChatSnapshot()
     _activeChatId.value = null
     _errorText.value = null
+    _lastConnectionError.value = null
+    _lastRequestId.value = null
   }
 
   fun setLanguageTag(tag: String) {
@@ -406,6 +476,66 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     if (_disclaimerAccepted.value) return
     prefs.saveDisclaimerAccepted()
     _disclaimerAccepted.value = true
+  }
+
+  fun buildDiagnosticsSummary(): String {
+    val account = _account.value
+    val serverUrl = account?.serverUrl ?: ""
+    val userId = account?.userId ?: ""
+    val hostCount = _hosts.value.size
+    val publicChannel = if (_publicChannelEnabled.value) _publicChannelId.value else ""
+    val publicName = if (_publicChannelEnabled.value) _publicChannelName.value else ""
+    val lastError = _lastConnectionError.value ?: _errorText.value ?: ""
+    val requestId = _lastRequestId.value ?: ""
+    val lines = mutableListOf<String>()
+    lines.add("timestamp=${Instant.now()}")
+    lines.add("appVersion=${BuildConfig.VERSION_NAME}")
+    lines.add("serverUrl=${serverUrl}")
+    lines.add("userId=${userId}")
+    lines.add("connectionState=${_connectionState.value}")
+    lines.add("hosts=${hostCount}")
+    if (publicChannel.isNotBlank()) {
+      lines.add("publicChannel=${publicChannel}")
+      if (publicName.isNotBlank()) {
+        lines.add("publicChannelName=${publicName}")
+      }
+    }
+    if (lastError.isNotBlank()) {
+      lines.add("lastError=${lastError}")
+    }
+    if (requestId.isNotBlank()) {
+      lines.add("requestId=${requestId}")
+    }
+    return lines.joinToString("\n")
+  }
+
+  fun setPublicChannelEnabled(enabled: Boolean) {
+    if (_publicChannelEnabled.value == enabled) return
+    prefs.savePublicChannelEnabled(enabled)
+    _publicChannelEnabled.value = enabled
+    syncPublicChannelState()
+  }
+
+  fun setPublicChannelId(channelId: String) {
+    val normalized = normalizePublicChannelId(channelId)
+    val current = normalizePublicChannelId(_publicChannelId.value)
+    if (normalized == current) return
+    val previousChatId = resolvePublicChatId(current)
+    prefs.savePublicChannelId(normalized)
+    _publicChannelId.value = normalized
+    if (_publicChannelEnabled.value) {
+      syncPublicChannelState(previousChatId)
+    }
+  }
+
+  fun setPublicChannelName(name: String) {
+    val normalized = normalizePublicChannelName(name)
+    if (normalized == _publicChannelName.value) return
+    prefs.savePublicChannelName(normalized)
+    _publicChannelName.value = normalized
+    if (_publicChannelEnabled.value) {
+      syncPublicChannelState()
+    }
   }
 
   fun checkForUpdates() {
@@ -530,7 +660,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
           return false
         }
     if (response.ok != true || response.userId.isNullOrBlank()) {
-      _errorText.value = response.error ?: appString(R.string.error_login_failed)
+      rememberRequestId(response.requestId)
+      _errorText.value = formatAuthError(response.error, response.requestId, R.string.error_login_failed)
       _connectionState.value = TestChatConnectionState.Error
       return false
     }
@@ -551,6 +682,7 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
 
   fun openChatFromNotification(chatId: String) {
     if (chatId.isBlank()) return
+    if (isPublicChatId(chatId) && !_publicChannelEnabled.value) return
     updateSnapshot { snapshot ->
       if (snapshot.threads.any { it.chatId == chatId }) return@updateSnapshot snapshot
       val now = System.currentTimeMillis()
@@ -705,7 +837,16 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   fun sendMessage(text: String) {
     val account = _account.value ?: return
     val chatId = _activeChatId.value ?: return
-    if (text.isBlank()) return
+    val trimmedText = text.trim()
+    if (trimmedText.isBlank()) return
+    val broadcastText =
+      if (isPublicChatId(chatId)) extractBroadcastText(trimmedText) else null
+    val messageText = broadcastText ?: trimmedText
+    if (messageText.isBlank()) return
+    if (broadcastText != null) {
+      sendBroadcastMessage(account, chatId, messageText)
+      return
+    }
     val host = resolveHostForChat(chatId) ?: run {
       _errorText.value = appString(R.string.error_host_not_found)
       return
@@ -718,7 +859,7 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
         id = messageId,
         chatId = chatId,
         direction = "out",
-        text = text.trim(),
+        text = messageText,
         timestampMs = now,
         senderName = account.userId,
         deliveryStatus = DELIVERY_SENDING,
@@ -757,31 +898,107 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     }
   }
 
+  private fun sendBroadcastMessage(account: TestChatAccount, chatId: String, text: String) {
+    val hosts = _hosts.value
+    if (hosts.isEmpty()) {
+      _errorText.value = appString(R.string.error_host_not_found)
+      return
+    }
+    _errorText.value = null
+    val now = System.currentTimeMillis()
+    val messageId = UUID.randomUUID().toString()
+    val message =
+      TestChatMessage(
+        id = messageId,
+        chatId = chatId,
+        direction = "out",
+        text = text,
+        timestampMs = now,
+        senderName = account.userId,
+        deliveryStatus = DELIVERY_SENDING,
+      )
+    appendMessage(message, incrementUnread = false)
+    hosts.forEach { host ->
+      updateLocalTokenUsage(
+        token = host.token,
+        inboundDelta = 1,
+        lastSeenAt = now,
+        lastInboundAt = now,
+      )
+    }
+    viewModelScope.launch {
+      var successCount = 0
+      var lastError: String? = null
+      for (host in hosts) {
+        val credentials =
+          TestChatCredentials(
+            serverUrl = account.serverUrl,
+            userId = account.userId,
+            token = host.token,
+          )
+        val response =
+          runCatching {
+            client.sendMessage(credentials, chatId, message.text, message.senderName, messageId)
+          }
+            .getOrElse {
+              lastError = it.message
+              continue
+            }
+        response.use { res ->
+          if (!res.isSuccessful) {
+            lastError = "HTTP ${res.code}"
+          } else {
+            successCount += 1
+          }
+        }
+      }
+      if (successCount == 0) {
+        _errorText.value = appString(R.string.error_send_failed_detail, lastError ?: "")
+        updateMessageStatus(messageId, DELIVERY_FAILED)
+      } else {
+        updateMessageStatus(messageId, DELIVERY_SENT)
+      }
+    }
+  }
+
+  private fun extractBroadcastText(raw: String): String? {
+    val trimmed = raw.trim()
+    if (!trimmed.startsWith("@all", ignoreCase = true)) return null
+    if (trimmed.length == 4) return ""
+    val next = trimmed[4]
+    if (!next.isWhitespace()) return null
+    return trimmed.drop(4).trim()
+  }
+
   private fun appendMessage(message: TestChatMessage, incrementUnread: Boolean) {
     updateSnapshot { snapshot ->
       val nextMessages =
         (snapshot.messages + message).takeLast(MAX_MESSAGES)
       val thread = snapshot.threads.firstOrNull { it.chatId == message.chatId }
-      val updatedThread =
-        if (thread == null) {
-          TestChatThread(
-            chatId = message.chatId,
-            title = message.senderName ?: message.chatId,
-            lastMessage = message.text,
-            lastTimestampMs = message.timestampMs,
-            unreadCount = if (incrementUnread) 1 else 0,
-          )
-        } else {
-          thread.copy(
-            lastMessage = message.text,
-            lastTimestampMs = message.timestampMs,
-            unreadCount = if (incrementUnread) thread.unreadCount + 1 else thread.unreadCount,
-            isDeleted = false,
-            deletedAt = null,
-          )
-        }
       val updatedThreads =
-        snapshot.threads.filterNot { it.chatId == message.chatId } + updatedThread
+        if (thread == null && isPublicChatId(message.chatId) && !_publicChannelEnabled.value) {
+          snapshot.threads
+        } else {
+          val updatedThread =
+            if (thread == null) {
+              TestChatThread(
+                chatId = message.chatId,
+                title = message.senderName ?: message.chatId,
+                lastMessage = message.text,
+                lastTimestampMs = message.timestampMs,
+                unreadCount = if (incrementUnread) 1 else 0,
+              )
+            } else {
+              thread.copy(
+                lastMessage = message.text,
+                lastTimestampMs = message.timestampMs,
+                unreadCount = if (incrementUnread) thread.unreadCount + 1 else thread.unreadCount,
+                isDeleted = false,
+                deletedAt = null,
+              )
+            }
+          snapshot.threads.filterNot { it.chatId == message.chatId } + updatedThread
+        }
       snapshot.copy(threads = updatedThreads, messages = nextMessages)
     }
   }
@@ -863,6 +1080,7 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
             streamState.reconnectAttempts = 0
             hostStates[host.label] = TestChatConnectionState.Connected
             _errorText.value = null
+            _lastConnectionError.value = null
             updateConnectionState()
             updateLocalTokenUsage(
               token = host.token,
@@ -932,8 +1150,9 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
           ) {
             hostStates[host.label] = TestChatConnectionState.Error
             val reason = t?.message ?: appString(R.string.error_connection_failed)
-            _errorText.value =
-              appString(R.string.error_host_connection_failed, host.label, reason)
+            val message = appString(R.string.error_host_connection_failed, host.label, reason)
+            _errorText.value = message
+            _lastConnectionError.value = message
             updateConnectionState()
             scheduleReconnect(account, host)
           }
@@ -972,11 +1191,20 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   }
 
   private fun updateForegroundService(account: TestChatAccount, hosts: List<TestChatHost>) {
-    if (hosts.isEmpty()) {
+    val hostCount = resolveHostCount(hosts)
+    if (hostCount == 0) {
       TestChatForegroundService.stop(getApplication())
       return
     }
-    TestChatForegroundService.start(getApplication(), account.userId, hosts.size)
+    TestChatForegroundService.start(getApplication(), account.userId, hostCount)
+  }
+
+  private fun resolveHostCount(hosts: List<TestChatHost>): Int {
+    return hosts
+      .map { it.label.trim() to it.token.trim() }
+      .filter { (label, token) -> label.isNotEmpty() && token.isNotEmpty() }
+      .distinctBy { (label, _) -> label.lowercase() }
+      .size
   }
 
   private fun updateConnectionState() {
@@ -1041,6 +1269,7 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
       schedulePersist()
     }
     ensureDefaultThread(cleaned)
+    syncPublicChannelState()
   }
 
   private fun ensureDefaultThread(snapshot: TestChatSnapshot) {
@@ -1053,6 +1282,116 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
         sessionName = "main",
       )
     }
+  }
+
+  private fun ensurePublicDefaults() {
+    val normalizedId = normalizePublicChannelId(_publicChannelId.value)
+    if (normalizedId != _publicChannelId.value) {
+      prefs.savePublicChannelId(normalizedId)
+      _publicChannelId.value = normalizedId
+    }
+    val normalizedName = normalizePublicChannelName(_publicChannelName.value)
+    if (normalizedName != _publicChannelName.value) {
+      prefs.savePublicChannelName(normalizedName)
+      _publicChannelName.value = normalizedName
+    }
+  }
+
+  private fun syncPublicChannelState(previousChatId: String? = null) {
+    val enabled = _publicChannelEnabled.value
+    val resolvedChatId = resolvePublicChatId()
+    val resolvedTitle = normalizePublicChannelName(_publicChannelName.value)
+    if (!enabled) {
+      if (_activeChatId.value?.let { isPublicChatId(it) } == true) {
+        _activeChatId.value = null
+      }
+      updateSnapshot { snapshot ->
+        val filteredThreads = snapshot.threads.filterNot { isPublicChatId(it.chatId) }
+        if (filteredThreads.size == snapshot.threads.size) return@updateSnapshot snapshot
+        snapshot.copy(threads = filteredThreads)
+      }
+      return
+    }
+    val previous = previousChatId?.ifBlank { null }
+    if (_activeChatId.value?.let { isPublicChatId(it) } == true && _activeChatId.value != resolvedChatId) {
+      _activeChatId.value = resolvedChatId
+    }
+    updateSnapshot { snapshot ->
+      val hasPublicThread = snapshot.threads.any { isPublicChatId(it.chatId) }
+      val updatedMessages =
+        if (previous != null && previous != resolvedChatId) {
+          snapshot.messages.map { message ->
+            if (message.chatId == previous || isPublicChatId(message.chatId)) {
+              message.copy(chatId = resolvedChatId)
+            } else {
+              message
+            }
+          }
+        } else if (hasPublicThread && snapshot.threads.any { isPublicChatId(it.chatId) && it.chatId != resolvedChatId }) {
+          snapshot.messages.map { message ->
+            if (isPublicChatId(message.chatId)) message.copy(chatId = resolvedChatId) else message
+          }
+        } else {
+          snapshot.messages
+        }
+      val updatedThreads =
+        snapshot.threads.mapNotNull { thread ->
+          if (!isPublicChatId(thread.chatId)) return@mapNotNull thread
+          if (thread.chatId == resolvedChatId) {
+            thread.copy(title = resolvedTitle)
+          } else {
+            thread.copy(chatId = resolvedChatId, title = resolvedTitle)
+          }
+        }
+      val withPublicThread =
+        if (updatedThreads.any { it.chatId == resolvedChatId }) {
+          updatedThreads
+        } else {
+          updatedThreads + buildPublicThread(updatedMessages, resolvedChatId, resolvedTitle)
+        }
+      snapshot.copy(threads = withPublicThread, messages = updatedMessages)
+    }
+  }
+
+  private fun buildPublicThread(
+    messages: List<TestChatMessage>,
+    chatId: String,
+    title: String,
+  ): TestChatThread {
+    val latest = messages.filter { it.chatId == chatId }.maxByOrNull { it.timestampMs }
+    val now = System.currentTimeMillis()
+    return TestChatThread(
+      chatId = chatId,
+      title = title,
+      lastMessage = latest?.text ?: appString(R.string.msg_start_chatting),
+      lastTimestampMs = latest?.timestampMs ?: now,
+    )
+  }
+
+  private fun resolvePublicChatId(channelId: String = _publicChannelId.value): String {
+    val normalized = normalizePublicChannelId(channelId)
+    return "${PUBLIC_CHAT_PREFIX}${normalized}"
+  }
+
+  private fun normalizePublicChannelId(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.isBlank()) return DEFAULT_PUBLIC_CHANNEL_ID
+    return trimmed
+      .replace(Regex("\\s+"), "-")
+      .replace(Regex("[/|:]"), "-")
+  }
+
+  private fun normalizePublicChannelName(raw: String): String {
+    val trimmed = raw.trim()
+    return if (trimmed.isBlank()) {
+      appString(R.string.public_channel_default_name)
+    } else {
+      trimmed
+    }
+  }
+
+  private fun isPublicChatId(chatId: String): Boolean {
+    return chatId.startsWith(PUBLIC_CHAT_PREFIX)
   }
 
   private fun updateSnapshot(transform: (TestChatSnapshot) -> TestChatSnapshot) {
@@ -1107,6 +1446,9 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   }
 
   private fun resolveHostForChat(chatId: String): TestChatHost? {
+    if (isPublicChatId(chatId)) {
+      return _hosts.value.firstOrNull()
+    }
     val identity = parseChatIdentity(chatId)
     return _hosts.value.firstOrNull { it.label.equals(identity.machine, ignoreCase = true) }
   }
@@ -1115,6 +1457,7 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     val trimmed = rawChatId.trim()
     val normalizedHost = normalizeHostLabel(hostLabel)
     if (trimmed.isBlank()) return defaultChatId(normalizedHost)
+    if (trimmed.startsWith(PUBLIC_CHAT_PREFIX)) return trimmed
     if (trimmed.startsWith("machine:") || trimmed.startsWith("device:")) return trimmed
     if (trimmed.contains("/") || trimmed.contains("|")) return trimmed
     if (normalizedHost == "default") return trimmed
@@ -1155,6 +1498,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     val auth: Triple<TestChatAccount?, List<TestChatHost>, String?>,
     val connectionState: TestChatConnectionState,
     val errorText: String?,
+    val lastConnectionError: String?,
+    val lastRequestId: String?,
     val snapshot: TestChatSnapshot,
     val activeChatId: String?,
   )
@@ -1277,6 +1622,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   }
 
   companion object {
+    private const val PUBLIC_CHAT_PREFIX = "public:"
+    private const val DEFAULT_PUBLIC_CHANNEL_ID = "general"
     private const val MAX_MESSAGES = 2000
     private const val DELIVERY_SENDING = "sending"
     private const val DELIVERY_SENT = "sent"

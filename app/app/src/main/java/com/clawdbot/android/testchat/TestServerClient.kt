@@ -45,6 +45,7 @@ data class TestServerLoginResponse(
   val token: String? = null,
   val displayName: String? = null,
   val error: String? = null,
+  val requestId: String? = null,
 )
 
 @Serializable
@@ -59,6 +60,7 @@ data class TestServerTokenResponse(
   val userId: String? = null,
   val token: String? = null,
   val error: String? = null,
+  val requestId: String? = null,
 )
 
 @Serializable
@@ -67,12 +69,14 @@ data class TestServerTokenUsageResponse(
   val userId: String? = null,
   val usage: List<TestChatTokenUsage>? = null,
   val error: String? = null,
+  val requestId: String? = null,
 )
 
 @Serializable
 data class TestServerHealthResponse(
   val ok: Boolean? = null,
   val error: String? = null,
+  val requestId: String? = null,
 )
 
 @Serializable
@@ -81,6 +85,7 @@ data class TestServerConfigResponse(
   val inviteRequired: Boolean? = null,
   val allowRegistration: Boolean? = null,
   val error: String? = null,
+  val requestId: String? = null,
 )
 
 @Serializable
@@ -106,6 +111,10 @@ class TestServerClient(
   private val client: OkHttpClient,
 ) {
   private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+
+  private fun resolveRequestId(response: Response, requestId: String?): String? {
+    return requestId?.ifBlank { null } ?: response.header("x-request-id")?.trim()?.ifBlank { null }
+  }
 
   fun openStream(
     credentials: TestChatCredentials,
@@ -148,16 +157,26 @@ class TestServerClient(
         val parsed =
           runCatching { json.decodeFromString(TestServerLoginResponse.serializer(), raw) }
             .getOrNull()
+        val requestId = resolveRequestId(response, parsed?.requestId)
         if (!response.isSuccessful) {
-          return@use parsed?.copy(ok = false, error = parsed.error ?: "HTTP ${response.code}")
-            ?: TestServerLoginResponse(ok = false, error = "HTTP ${response.code}")
+          return@use parsed?.copy(
+            ok = false,
+            error = parsed.error ?: "HTTP ${response.code}",
+            requestId = requestId,
+          )
+            ?: TestServerLoginResponse(
+              ok = false,
+              error = "HTTP ${response.code}",
+              requestId = requestId,
+            )
         }
-        parsed ?: TestServerLoginResponse(ok = false, error = "Invalid response")
+        parsed?.copy(requestId = requestId)
+          ?: TestServerLoginResponse(ok = false, error = "Invalid response", requestId = requestId)
       }
     }
   }
 
-  suspend fun fetchPublicConfig(serverUrl: String): TestServerPublicConfigResponse {
+  suspend fun fetchPublicConfig(serverUrl: String): TestServerConfigResponse {
     val request =
       Request.Builder()
         .url("${normalizeBaseUrl(serverUrl)}/api/config")
@@ -168,13 +187,23 @@ class TestServerClient(
         val raw = response.body?.string() ?: ""
         val parsed =
           runCatching {
-            json.decodeFromString(TestServerPublicConfigResponse.serializer(), raw)
+            json.decodeFromString(TestServerConfigResponse.serializer(), raw)
           }.getOrNull()
+        val requestId = resolveRequestId(response, parsed?.requestId)
         if (!response.isSuccessful) {
-          return@use parsed?.copy(ok = false, error = parsed.error ?: "HTTP ${response.code}")
-            ?: TestServerPublicConfigResponse(ok = false, error = "HTTP ${response.code}")
+          return@use parsed?.copy(
+            ok = false,
+            error = parsed.error ?: "HTTP ${response.code}",
+            requestId = requestId,
+          )
+            ?: TestServerConfigResponse(
+              ok = false,
+              error = "HTTP ${response.code}",
+              requestId = requestId,
+            )
         }
-        parsed ?: TestServerPublicConfigResponse(ok = false, error = "Invalid response")
+        parsed?.copy(requestId = requestId)
+          ?: TestServerConfigResponse(ok = false, error = "Invalid response", requestId = requestId)
       }
     }
   }
@@ -204,11 +233,21 @@ class TestServerClient(
         val parsed =
           runCatching { json.decodeFromString(TestServerLoginResponse.serializer(), raw) }
             .getOrNull()
+        val requestId = resolveRequestId(response, parsed?.requestId)
         if (!response.isSuccessful) {
-          return@use parsed?.copy(ok = false, error = parsed.error ?: "HTTP ${response.code}")
-            ?: TestServerLoginResponse(ok = false, error = "HTTP ${response.code}")
+          return@use parsed?.copy(
+            ok = false,
+            error = parsed.error ?: "HTTP ${response.code}",
+            requestId = requestId,
+          )
+            ?: TestServerLoginResponse(
+              ok = false,
+              error = "HTTP ${response.code}",
+              requestId = requestId,
+            )
         }
-        parsed ?: TestServerLoginResponse(ok = false, error = "Invalid response")
+        parsed?.copy(requestId = requestId)
+          ?: TestServerLoginResponse(ok = false, error = "Invalid response", requestId = requestId)
       }
     }
   }
@@ -236,11 +275,21 @@ class TestServerClient(
         val parsed =
           runCatching { json.decodeFromString(TestServerLoginResponse.serializer(), raw) }
             .getOrNull()
+        val requestId = resolveRequestId(response, parsed?.requestId)
         if (!response.isSuccessful) {
-          return@use parsed?.copy(ok = false, error = parsed.error ?: "HTTP ${response.code}")
-            ?: TestServerLoginResponse(ok = false, error = "HTTP ${response.code}")
+          return@use parsed?.copy(
+            ok = false,
+            error = parsed.error ?: "HTTP ${response.code}",
+            requestId = requestId,
+          )
+            ?: TestServerLoginResponse(
+              ok = false,
+              error = "HTTP ${response.code}",
+              requestId = requestId,
+            )
         }
-        parsed ?: TestServerLoginResponse(ok = false, error = "Invalid response")
+        parsed?.copy(requestId = requestId)
+          ?: TestServerLoginResponse(ok = false, error = "Invalid response", requestId = requestId)
       }
     }
   }
@@ -267,11 +316,21 @@ class TestServerClient(
         val parsed =
           runCatching { json.decodeFromString(TestServerTokenResponse.serializer(), raw) }
             .getOrNull()
+        val requestId = resolveRequestId(response, parsed?.requestId)
         if (!response.isSuccessful) {
-          return@use parsed?.copy(ok = false, error = parsed.error ?: "HTTP ${response.code}")
-            ?: TestServerTokenResponse(ok = false, error = "HTTP ${response.code}")
+          return@use parsed?.copy(
+            ok = false,
+            error = parsed.error ?: "HTTP ${response.code}",
+            requestId = requestId,
+          )
+            ?: TestServerTokenResponse(
+              ok = false,
+              error = "HTTP ${response.code}",
+              requestId = requestId,
+            )
         }
-        parsed ?: TestServerTokenResponse(ok = false, error = "Invalid response")
+        parsed?.copy(requestId = requestId)
+          ?: TestServerTokenResponse(ok = false, error = "Invalid response", requestId = requestId)
       }
     }
   }
@@ -299,11 +358,21 @@ class TestServerClient(
         val parsed =
           runCatching { json.decodeFromString(TestServerTokenUsageResponse.serializer(), raw) }
             .getOrNull()
+        val requestId = resolveRequestId(response, parsed?.requestId)
         if (!response.isSuccessful) {
-          return@use parsed?.copy(ok = false, error = parsed.error ?: "HTTP ${response.code}")
-            ?: TestServerTokenUsageResponse(ok = false, error = "HTTP ${response.code}")
+          return@use parsed?.copy(
+            ok = false,
+            error = parsed.error ?: "HTTP ${response.code}",
+            requestId = requestId,
+          )
+            ?: TestServerTokenUsageResponse(
+              ok = false,
+              error = "HTTP ${response.code}",
+              requestId = requestId,
+            )
         }
-        parsed ?: TestServerTokenUsageResponse(ok = false, error = "Invalid response")
+        parsed?.copy(requestId = requestId)
+          ?: TestServerTokenUsageResponse(ok = false, error = "Invalid response", requestId = requestId)
       }
     }
   }
@@ -320,11 +389,21 @@ class TestServerClient(
         val parsed =
           runCatching { json.decodeFromString(TestServerHealthResponse.serializer(), raw) }
             .getOrNull()
+        val requestId = resolveRequestId(response, parsed?.requestId)
         if (!response.isSuccessful) {
-          return@use parsed?.copy(ok = false, error = parsed.error ?: "HTTP ${response.code}")
-            ?: TestServerHealthResponse(ok = false, error = "HTTP ${response.code}")
+          return@use parsed?.copy(
+            ok = false,
+            error = parsed.error ?: "HTTP ${response.code}",
+            requestId = requestId,
+          )
+            ?: TestServerHealthResponse(
+              ok = false,
+              error = "HTTP ${response.code}",
+              requestId = requestId,
+            )
         }
-        parsed ?: TestServerHealthResponse(ok = false, error = "Invalid response")
+        parsed?.copy(requestId = requestId)
+          ?: TestServerHealthResponse(ok = false, error = "Invalid response", requestId = requestId)
       }
     }
   }
@@ -341,11 +420,21 @@ class TestServerClient(
         val parsed =
           runCatching { json.decodeFromString(TestServerConfigResponse.serializer(), raw) }
             .getOrNull()
+        val requestId = resolveRequestId(response, parsed?.requestId)
         if (!response.isSuccessful) {
-          return@use parsed?.copy(ok = false, error = parsed.error ?: "HTTP ${response.code}")
-            ?: TestServerConfigResponse(ok = false, error = "HTTP ${response.code}")
+          return@use parsed?.copy(
+            ok = false,
+            error = parsed.error ?: "HTTP ${response.code}",
+            requestId = requestId,
+          )
+            ?: TestServerConfigResponse(
+              ok = false,
+              error = "HTTP ${response.code}",
+              requestId = requestId,
+            )
         }
-        parsed ?: TestServerConfigResponse(ok = false, error = "Invalid response")
+        parsed?.copy(requestId = requestId)
+          ?: TestServerConfigResponse(ok = false, error = "Invalid response", requestId = requestId)
       }
     }
   }
