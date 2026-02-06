@@ -158,29 +158,28 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
       )
     }
 
-  private val uiStateExtras =
+  private val baseUiStateWithErrors =
     combine(
       baseUiState,
       _lastConnectionError,
       _lastRequestId,
+    ) { base, lastConnectionError, lastRequestId ->
+      base.copy(
+        lastConnectionError = lastConnectionError,
+        lastRequestId = lastRequestId,
+      )
+    }
+
+  private val uiStateExtras =
+    combine(
+      baseUiStateWithErrors,
       _tokenUsage,
       _inviteRequired,
       _serverTestMessage,
       _serverTestSuccess,
-    ) { values ->
-      val base = values[0] as UiStateParts
-      val lastConnectionError = values[1] as String?
-      val lastRequestId = values[2] as String?
-      val tokenUsage = values[3] as Map<String, TestChatTokenUsage>
-      val inviteRequired = values[4] as Boolean?
-      val serverTestMessage = values[5] as String?
-      val serverTestSuccess = values[6] as Boolean?
+    ) { base, tokenUsage, inviteRequired, serverTestMessage, serverTestSuccess ->
       UiStateExtras(
-        base =
-          base.copy(
-            lastConnectionError = lastConnectionError,
-            lastRequestId = lastRequestId,
-          ),
+        base = base,
         tokenUsage = tokenUsage,
         inviteRequired = inviteRequired,
         serverTestMessage = serverTestMessage,
