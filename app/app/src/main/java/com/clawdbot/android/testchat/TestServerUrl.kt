@@ -2,6 +2,7 @@ package com.clawdbot.android.testchat
 
 private const val officialHost = "vimagram.vimalinx.xyz"
 private const val legacyHost = "123.60.21.129:8788"
+private const val officialBaseUrl = "http://$officialHost:8788"
 
 fun normalizeServerBaseUrl(raw: String): String {
   val trimmed = raw.trim().removeSuffix("/")
@@ -23,7 +24,7 @@ private fun normalizeOfficialHost(raw: String): String {
       withoutScheme.equals("$officialHost:8788", ignoreCase = true) ||
       withoutScheme.equals(legacyHost, ignoreCase = true)
   ) {
-    return "https://$officialHost"
+    return officialBaseUrl
   }
   return raw
 }

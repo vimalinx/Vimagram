@@ -8,6 +8,10 @@ data class ChatIdentity(
 fun parseChatIdentity(chatId: String): ChatIdentity {
   val raw = chatId.trim()
   if (raw.isBlank()) return ChatIdentity("default", "session")
+  if (raw.startsWith("public:")) {
+    val channel = raw.removePrefix("public:").ifBlank { "channel" }
+    return ChatIdentity("public", channel)
+  }
   val cleaned = raw.removePrefix("machine:").removePrefix("device:")
   if (cleaned.startsWith("user:")) {
     val session = cleaned.removePrefix("user:").ifBlank { "main" }

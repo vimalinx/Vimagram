@@ -22,6 +22,9 @@ class TestChatPrefs(context: Context) {
     private const val lastEventIdsKey = "testchat.lastEventIds"
     private const val languageKey = "testchat.language"
     private const val disclaimerKey = "testchat.disclaimerAccepted"
+    private const val publicChannelEnabledKey = "testchat.publicChannel.enabled"
+    private const val publicChannelIdKey = "testchat.publicChannel.id"
+    private const val publicChannelNameKey = "testchat.publicChannel.name"
   }
 
   private val json = Json { ignoreUnknownKeys = true }
@@ -54,6 +57,15 @@ class TestChatPrefs(context: Context) {
 
   private val _disclaimerAccepted = MutableStateFlow(loadDisclaimerAccepted())
   val disclaimerAccepted: StateFlow<Boolean> = _disclaimerAccepted
+
+  private val _publicChannelEnabled = MutableStateFlow(loadPublicChannelEnabled())
+  val publicChannelEnabled: StateFlow<Boolean> = _publicChannelEnabled
+
+  private val _publicChannelId = MutableStateFlow(loadPublicChannelId())
+  val publicChannelId: StateFlow<String> = _publicChannelId
+
+  private val _publicChannelName = MutableStateFlow(loadPublicChannelName())
+  val publicChannelName: StateFlow<String> = _publicChannelName
 
   private val lastEventIds = loadLastEventIds().toMutableMap()
 
@@ -93,11 +105,17 @@ class TestChatPrefs(context: Context) {
       remove(hostsKey)
       remove(legacyTokenKey)
       remove(lastEventIdsKey)
+      remove(publicChannelEnabledKey)
+      remove(publicChannelIdKey)
+      remove(publicChannelNameKey)
     }
     _account.value = null
     _password.value = null
     _hosts.value = emptyList()
     lastEventIds.clear()
+    _publicChannelEnabled.value = false
+    _publicChannelId.value = ""
+    _publicChannelName.value = ""
   }
 
   fun clearSession() {
@@ -120,6 +138,29 @@ class TestChatPrefs(context: Context) {
       putBoolean(disclaimerKey, true)
     }
     _disclaimerAccepted.value = true
+  }
+
+  fun savePublicChannelEnabled(enabled: Boolean) {
+    prefs.edit {
+      putBoolean(publicChannelEnabledKey, enabled)
+    }
+    _publicChannelEnabled.value = enabled
+  }
+
+  fun savePublicChannelId(channelId: String) {
+    val normalized = channelId.trim()
+    prefs.edit {
+      putString(publicChannelIdKey, normalized)
+    }
+    _publicChannelId.value = normalized
+  }
+
+  fun savePublicChannelName(name: String) {
+    val normalized = name.trim()
+    prefs.edit {
+      putString(publicChannelNameKey, normalized)
+    }
+    _publicChannelName.value = normalized
   }
 
   fun getLastEventId(hostLabel: String): Long? {
@@ -195,5 +236,17 @@ class TestChatPrefs(context: Context) {
 
   private fun loadDisclaimerAccepted(): Boolean {
     return prefs.getBoolean(disclaimerKey, false)
+  }
+
+  private fun loadPublicChannelEnabled(): Boolean {
+    return prefs.getBoolean(publicChannelEnabledKey, false)
+  }
+
+  private fun loadPublicChannelId(): String {
+    return prefs.getString(publicChannelIdKey, "")?.trim().orEmpty()
+  }
+
+  private fun loadPublicChannelName(): String {
+    return prefs.getString(publicChannelNameKey, "")?.trim().orEmpty()
   }
 }

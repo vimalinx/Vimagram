@@ -13,7 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
@@ -67,6 +68,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -107,8 +109,6 @@ import androidx.compose.ui.unit.isUnspecified
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.text.method.LinkMovementMethod
 import android.util.TypedValue
 import android.widget.TextView
@@ -126,6 +126,9 @@ fun TestChatApp(viewModel: TestChatViewModel) {
   val state by viewModel.uiState.collectAsState()
   val languageTag by viewModel.languageTag.collectAsState()
   val disclaimerAccepted by viewModel.disclaimerAccepted.collectAsState()
+  val publicChannelEnabled by viewModel.publicChannelEnabled.collectAsState()
+  val publicChannelId by viewModel.publicChannelId.collectAsState()
+  val publicChannelName by viewModel.publicChannelName.collectAsState()
   val serverConfig by viewModel.serverConfig.collectAsState()
   val serverTestMessage by viewModel.serverTestMessage.collectAsState()
   val context = LocalContext.current
@@ -153,7 +156,7 @@ fun TestChatApp(viewModel: TestChatViewModel) {
         initialServerUrl = state.account?.serverUrl,
         serverConfig = serverConfig,
         onRefreshServerConfig = viewModel::refreshServerConfig,
-        onClearServerTest = viewModel::clearServerTestMessage,
+        onClearServerTest = viewModel::clearServerTestStatus,
         onRegister = { serverUrl, userId, inviteCode, password ->
           viewModel.registerAccount(serverUrl, userId, inviteCode, password) { registeredId ->
             registrationUserId = registeredId
@@ -161,7 +164,6 @@ fun TestChatApp(viewModel: TestChatViewModel) {
         },
         onLogin = viewModel::loginAccount,
         onTestServer = viewModel::testServerConnection,
-        onClearServerTest = viewModel::clearServerTestStatus,
         onFetchServerConfig = viewModel::fetchServerConfig,
       )
     } else if (state.activeChatId != null) {
@@ -185,8 +187,15 @@ fun TestChatApp(viewModel: TestChatViewModel) {
                 onLogout = viewModel::logout,
                 languageTag = languageTag,
                 onLanguageChange = viewModel::setLanguageTag,
+                publicChannelEnabled = publicChannelEnabled,
+                publicChannelId = publicChannelId,
+                publicChannelName = publicChannelName,
+                onPublicChannelEnabledChange = viewModel::setPublicChannelEnabled,
+                onPublicChannelIdChange = viewModel::setPublicChannelId,
+                onPublicChannelNameChange = viewModel::setPublicChannelName,
                 updateState = viewModel.updateState.collectAsState().value,
                 onCheckUpdates = viewModel::checkForUpdates,
+                onCopyDiagnostics = viewModel::buildDiagnosticsSummary,
               )
             }
             MainTab.Chat -> {
@@ -269,7 +278,6 @@ private fun AccountScreen(
   onRegister: (serverUrl: String, userId: String, inviteCode: String, password: String) -> Unit,
   onLogin: (serverUrl: String, userId: String, password: String) -> Unit,
   onTestServer: (serverUrl: String) -> Unit,
-  onClearServerTest: () -> Unit,
   onFetchServerConfig: (serverUrl: String) -> Unit,
 ) {
   val vimalinxServerLabel = stringResource(R.string.label_vimalinx_server)
@@ -385,6 +393,11 @@ private fun AccountScreen(
                 selectedServer = serverOptions.firstOrNull()?.url ?: ""
               }
             }
+          )
+          Text(
+            text = stringResource(R.string.label_server_url_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
           if (!serverTestMessage.isNullOrBlank()) {
             if (serverTestSuccess == true) {
@@ -995,10 +1008,24 @@ private fun ChatScreen(
   val machineLabel = identity.machine
   val machineColor = resolveMachineColor(machineLabel)
   var message by rememberSaveable(chatId) { mutableStateOf("") }
+  var pendingBroadcast by remember(chatId) { mutableStateOf<String?>(null) }
+  val isPublicChat = chatId.startsWith("public:")
+  val broadcastDraft =
+    if (isPublicChat) {
+      extractBroadcastDraft(message)
+    } else {
+      null
+    }
   val listState = rememberLazyListState()
   val messageTextSize = resolveMessageTextSize()
   val markdown = rememberMarkwon(messageTextSize)
   var didInitialScroll by remember(chatId) { mutableStateOf(false) }
+  val placeholderText =
+    if (isPublicChat) {
+      stringResource(R.string.label_message_public_channel)
+    } else {
+      stringResource(R.string.label_message)
+    }
 
   BackHandler(enabled = true) {
     onBack()
@@ -1063,6 +1090,9 @@ private fun ChatScreen(
       ) {
         ErrorCard(text = state.errorText ?: "")
       }
+      if (broadcastDraft != null) {
+        InfoCard(text = stringResource(R.string.label_public_channel_broadcast_hint))
+      }
       LazyColumn(
         state = listState,
         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
@@ -1077,11 +1107,41 @@ private fun ChatScreen(
         value = message,
         onValueChange = { message = it },
         onSend = {
-          onSend(message)
-          message = ""
+          if (broadcastDraft != null) {
+            pendingBroadcast = message
+          } else {
+            onSend(message)
+            message = ""
+          }
         },
+        placeholder = placeholderText,
       )
     }
+  }
+
+  if (pendingBroadcast != null) {
+    AlertDialog(
+      onDismissRequest = { pendingBroadcast = null },
+      title = { Text(stringResource(R.string.title_broadcast_confirm)) },
+      text = { Text(stringResource(R.string.msg_broadcast_confirm)) },
+      confirmButton = {
+        TextButton(
+          onClick = {
+            val payload = pendingBroadcast.orEmpty()
+            pendingBroadcast = null
+            onSend(payload)
+            message = ""
+          },
+        ) {
+          Text(stringResource(R.string.action_broadcast))
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { pendingBroadcast = null }) {
+          Text(stringResource(R.string.action_cancel))
+        }
+      },
+    )
   }
 }
 
@@ -1092,8 +1152,15 @@ private fun AccountDashboardScreen(
   onLogout: () -> Unit,
   languageTag: String,
   onLanguageChange: (String) -> Unit,
+  publicChannelEnabled: Boolean,
+  publicChannelId: String,
+  publicChannelName: String,
+  onPublicChannelEnabledChange: (Boolean) -> Unit,
+  onPublicChannelIdChange: (String) -> Unit,
+  onPublicChannelNameChange: (String) -> Unit,
   updateState: UpdateState,
   onCheckUpdates: () -> Unit,
+  onCopyDiagnostics: () -> String,
 ) {
   val account = state.account
   val userLabel = account?.userId ?: stringResource(R.string.label_unknown_user)
@@ -1105,6 +1172,7 @@ private fun AccountDashboardScreen(
   val context = LocalContext.current
   var showLogoutConfirm by remember { mutableStateOf(false) }
   var showSettingsSheet by remember { mutableStateOf(false) }
+  var showDiagnosticsCopied by remember { mutableStateOf(false) }
 
   Scaffold(
     topBar = {
@@ -1216,6 +1284,15 @@ private fun AccountDashboardScreen(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
+        SectionHeader(text = stringResource(R.string.title_public_channel))
+        PublicChannelSettingsSection(
+          enabled = publicChannelEnabled,
+          channelId = publicChannelId,
+          channelName = publicChannelName,
+          onEnabledChange = onPublicChannelEnabledChange,
+          onChannelIdChange = onPublicChannelIdChange,
+          onChannelNameChange = onPublicChannelNameChange,
+        )
         SectionHeader(text = stringResource(R.string.title_updates))
         UpdateSettingsSection(
           updateState = updateState,
@@ -1230,6 +1307,34 @@ private fun AccountDashboardScreen(
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
           },
         )
+        SectionHeader(text = stringResource(R.string.title_diagnostics))
+        Card(
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+          modifier = Modifier.fillMaxWidth(),
+        ) {
+          Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+          ) {
+            Text(
+              text = stringResource(R.string.msg_diagnostics_helper),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+              onClick = {
+                clipboard.setText(AnnotatedString(onCopyDiagnostics()))
+                showDiagnosticsCopied = true
+              },
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Text(stringResource(R.string.action_copy_diagnostics))
+            }
+            if (showDiagnosticsCopied) {
+              InfoCard(text = stringResource(R.string.msg_diagnostics_copied))
+            }
+          }
+        }
       }
     }
   }
@@ -1273,6 +1378,60 @@ private fun SectionHeader(text: String) {
     style = MaterialTheme.typography.titleMedium,
     fontWeight = FontWeight.SemiBold,
   )
+}
+
+@Composable
+private fun PublicChannelSettingsSection(
+  enabled: Boolean,
+  channelId: String,
+  channelName: String,
+  onEnabledChange: (Boolean) -> Unit,
+  onChannelIdChange: (String) -> Unit,
+  onChannelNameChange: (String) -> Unit,
+) {
+  Card(
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    modifier = Modifier.fillMaxWidth(),
+  ) {
+    Column(
+      modifier = Modifier.padding(12.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+          text = stringResource(R.string.label_public_channel_enabled),
+          style = MaterialTheme.typography.bodyMedium,
+          modifier = Modifier.weight(1f),
+        )
+        Switch(
+          checked = enabled,
+          onCheckedChange = onEnabledChange,
+        )
+      }
+      TextField(
+        value = channelName,
+        onValueChange = onChannelNameChange,
+        label = { Text(stringResource(R.string.label_public_channel_name)) },
+        singleLine = true,
+        enabled = enabled,
+        colors = textFieldColors(),
+        modifier = Modifier.fillMaxWidth(),
+      )
+      TextField(
+        value = channelId,
+        onValueChange = onChannelIdChange,
+        label = { Text(stringResource(R.string.label_public_channel_id)) },
+        placeholder = { Text(stringResource(R.string.placeholder_public_channel_id)) },
+        singleLine = true,
+        enabled = enabled,
+        colors = textFieldColors(),
+        modifier = Modifier.fillMaxWidth(),
+      )
+    }
+  }
 }
 
 @Composable
@@ -1522,7 +1681,7 @@ private fun ConnectionStatusRow(state: TestChatUiState) {
   val lastActivityMs = state.threads.maxOfOrNull { it.lastTimestampMs }
   val lastActivityLabel =
     lastActivityMs?.let { formatTime(it) } ?: stringResource(R.string.label_none)
-  val hostCount = state.hosts.size
+  val hostCount = resolveHostCount(state.hosts)
   val hostLabel =
     if (hostCount == 0) {
       stringResource(R.string.label_no_hosts)
@@ -1532,6 +1691,10 @@ private fun ConnectionStatusRow(state: TestChatUiState) {
   val detail =
     if (!state.errorText.isNullOrBlank()) {
       state.errorText
+    } else if (state.connectionState == TestChatConnectionState.Error &&
+      !state.lastConnectionError.isNullOrBlank()
+    ) {
+      state.lastConnectionError
     } else {
       stringResource(
         R.string.label_connection_detail,
@@ -2085,6 +2248,9 @@ private fun MessageBubble(
     if (isOutgoing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
   val textColor =
     if (isOutgoing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+  val clipboard = LocalClipboardManager.current
+  var menuExpanded by remember(message.id) { mutableStateOf(false) }
+  val messageText = message.text.trim()
   val statusLabel =
     if (isOutgoing) {
       formatDeliveryStatus(message.deliveryStatus)
@@ -2099,27 +2265,51 @@ private fun MessageBubble(
     modifier = Modifier.fillMaxWidth(),
     horizontalAlignment = alignment,
   ) {
-    Box(
-      modifier =
-        Modifier
-          .clip(RoundedCornerShape(18.dp))
-        .background(bubbleColor)
-        .padding(horizontal = 14.dp, vertical = 10.dp)
-        .widthIn(max = 280.dp),
-    ) {
-      Column {
-        MarkdownText(
-          markdown = markdown,
-          text = message.text,
-          textColor = textColor,
-          fontSize = messageTextSize,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-          text = metaLabel,
-          style = MaterialTheme.typography.labelSmall,
-          color = textColor.copy(alpha = 0.7f),
-          modifier = Modifier.align(Alignment.End),
+    Box {
+      Box(
+        modifier =
+          Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(bubbleColor)
+            .combinedClickable(
+              onClick = {},
+              onLongClick = {
+                if (messageText.isNotBlank()) {
+                  menuExpanded = true
+                }
+              },
+            )
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .widthIn(max = 280.dp),
+      ) {
+        Column {
+          MarkdownText(
+            markdown = markdown,
+            text = message.text,
+            textColor = textColor,
+            fontSize = messageTextSize,
+          )
+          Spacer(modifier = Modifier.height(4.dp))
+          Text(
+            text = metaLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = textColor.copy(alpha = 0.7f),
+            modifier = Modifier.align(Alignment.End),
+          )
+        }
+      }
+      DropdownMenu(
+        expanded = menuExpanded,
+        onDismissRequest = { menuExpanded = false },
+      ) {
+        DropdownMenuItem(
+          text = { Text(stringResource(R.string.action_copy_message)) },
+          enabled = messageText.isNotBlank(),
+          onClick = {
+            menuExpanded = false
+            clipboard.setText(AnnotatedString(messageText))
+          },
+          leadingIcon = { Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null) },
         )
       }
     }
@@ -2182,6 +2372,7 @@ private fun Composer(
   value: String,
   onValueChange: (String) -> Unit,
   onSend: () -> Unit,
+  placeholder: String,
 ) {
   Row(
     modifier =
@@ -2199,7 +2390,7 @@ private fun Composer(
       value = value,
       onValueChange = onValueChange,
       modifier = Modifier.weight(1f),
-      placeholder = { Text(stringResource(R.string.label_message)) },
+      placeholder = { Text(placeholder) },
       maxLines = 4,
       colors =
         TextFieldDefaults.colors(
@@ -2243,6 +2434,23 @@ private fun formatTime(timestampMs: Long): String {
   return timeFormatter.format(Instant.ofEpochMilli(timestampMs))
 }
 
+private fun resolveHostCount(hosts: List<TestChatHost>): Int {
+  return hosts
+    .map { it.label.trim() to it.token.trim() }
+    .filter { (label, token) -> label.isNotEmpty() && token.isNotEmpty() }
+    .distinctBy { (label, _) -> label.lowercase() }
+    .size
+}
+
+private fun extractBroadcastDraft(text: String): String? {
+  val trimmed = text.trim()
+  if (!trimmed.startsWith("@all", ignoreCase = true)) return null
+  if (trimmed.length == 4) return ""
+  val next = trimmed[4]
+  if (!next.isWhitespace()) return null
+  return trimmed.drop(4).trim()
+}
+
 private val machinePalette =
   listOf(
     Color(0xFF2563EB),
@@ -2255,4 +2463,4 @@ private val machinePalette =
   )
 
 private const val UUID_PREFIX = "local"
-private const val DEFAULT_SERVER_URL = "https://vimagram.vimalinx.xyz"
+private const val DEFAULT_SERVER_URL = "http://123.60.21.129:8788"
