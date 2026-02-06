@@ -42,6 +42,28 @@ export TEST_ALLOW_REGISTRATION=true
 node server/server.mjs
 ```
 
+或使用交互式配置脚本生成 `.env`：
+
+```bash
+node server/setup.mjs
+set -a && source .env && set +a
+node server/server.mjs
+```
+
+无交互一键生成默认配置：
+
+```bash
+node server/setup.mjs --defaults
+set -a && source .env && set +a
+node server/server.mjs
+```
+
+一键启动（需要已安装 Node.js 22+）：
+
+```bash
+bash server/bootstrap.sh
+```
+
 启动后，访问 `http://localhost:8788` 可以查看 Web UI。
 
 **说明：**

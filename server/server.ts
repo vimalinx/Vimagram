@@ -459,7 +459,12 @@ function updateTokenUsage(
 function sendJson(res: ServerResponse, status: number, body: Record<string, unknown>) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.end(JSON.stringify(body));
+  const requestId = res.getHeader("x-request-id");
+  const payload =
+    status >= 400 && requestId && body.requestId == null
+      ? { ...body, requestId: String(requestId) }
+      : body;
+  res.end(JSON.stringify(payload));
 }
 
 function sendText(res: ServerResponse, status: number, body: string) {
@@ -959,6 +964,15 @@ function serveFile(res: ServerResponse, path: string) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
+  const requestId = randomUUID();
+  const startTime = Date.now();
+  res.setHeader("x-request-id", requestId);
+  res.on("finish", () => {
+    const durationMs = Date.now() - startTime;
+    const method = req.method ?? "?";
+    const status = res.statusCode;
+    console.log(`${method} ${url.pathname} ${status} ${durationMs}ms req=${requestId}`);
+  });
 
   if (req.method === "GET" && url.pathname === "/healthz") {
     sendJson(res, 200, { ok: true });
