@@ -3,6 +3,7 @@ package com.clawdbot.android.ui.chat
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,30 +41,66 @@ import com.clawdbot.android.tools.ToolDisplayRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import com.clawdbot.android.R
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.Icon
 
 @Composable
 fun ChatMessageBubble(message: ChatMessage) {
   val isUser = message.role.lowercase() == "user"
+  val clipboard = LocalClipboardManager.current
+  var menuExpanded by remember(message.id) { mutableStateOf(false) }
+  val messageText = remember(message.content) { extractMessageText(message.content) }
 
   Row(
     modifier = Modifier.fillMaxWidth(),
     horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
   ) {
-    Surface(
-      shape = RoundedCornerShape(16.dp),
-      tonalElevation = 0.dp,
-      shadowElevation = 0.dp,
-      color = Color.Transparent,
-      modifier = Modifier.fillMaxWidth(0.92f),
-    ) {
-      Box(
+    Box {
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        color = Color.Transparent,
         modifier =
           Modifier
-            .background(bubbleBackground(isUser))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .fillMaxWidth(0.92f)
+            .combinedClickable(
+              onClick = {},
+              onLongClick = {
+                if (messageText.isNotBlank()) {
+                  menuExpanded = true
+                }
+              },
+            ),
       ) {
-        val textColor = textColorOverBubble(isUser)
-        ChatMessageBody(content = message.content, textColor = textColor)
+        Box(
+          modifier =
+            Modifier
+              .background(bubbleBackground(isUser))
+              .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+          val textColor = textColorOverBubble(isUser)
+          ChatMessageBody(content = message.content, textColor = textColor)
+        }
+      }
+      DropdownMenu(
+        expanded = menuExpanded,
+        onDismissRequest = { menuExpanded = false },
+      ) {
+        DropdownMenuItem(
+          text = { Text(stringResource(R.string.action_copy_message)) },
+          enabled = messageText.isNotBlank(),
+          onClick = {
+            menuExpanded = false
+            clipboard.setText(AnnotatedString(messageText))
+          },
+          leadingIcon = { Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null) },
+        )
       }
     }
   }
@@ -83,6 +122,16 @@ private fun ChatMessageBody(content: List<ChatMessageContent>, textColor: Color)
       }
     }
   }
+}
+
+private fun extractMessageText(content: List<ChatMessageContent>): String {
+  return content
+    .mapNotNull { part ->
+      if (part.type != "text") return@mapNotNull null
+      val text = part.text?.trim().orEmpty()
+      text.ifEmpty { null }
+    }
+    .joinToString("\n\n")
 }
 
 @Composable

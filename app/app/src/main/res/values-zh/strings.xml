@@ -15,6 +15,7 @@
     <string name="label_server_url">服务器地址</string>
     <string name="placeholder_server_url">http://host:8788</string>
     <string name="default_custom_server_label">自定义服务器</string>
+    <string name="label_vimalinx_server">Vimalinx 服务器</string>
     <string name="action_add">添加</string>
     <string name="action_cancel">取消</string>
     <string name="action_add_host">添加主机</string>
@@ -43,6 +44,7 @@
     <string name="title_host_token">主机 Token</string>
     <string name="msg_host_token">主机：%1$s\nToken：%2$s\n在 Clawdbot 中使用此 Token。</string>
     <string name="action_copy_token">复制 Token</string>
+    <string name="action_copy_message">复制消息</string>
     <string name="action_back">返回</string>
     <string name="title_account">账号</string>
     <string name="title_account_section">账号</string>
@@ -93,6 +95,23 @@
     <string name="status_replied">已回复</string>
     <string name="status_failed">发送失败</string>
     <string name="label_message">消息</string>
+    <string name="label_message_public_channel">消息（输入 @all 群发）</string>
+    <string name="label_public_channel_broadcast_hint">将群发给所有 Agent。</string>
+    <string name="label_server_url_hint">服务器地址格式：http://host:8788</string>
+    <string name="title_broadcast_confirm">确认群发？</string>
+    <string name="msg_broadcast_confirm">该消息将发送给所有已连接的 Agent。</string>
+    <string name="action_broadcast">群发</string>
+    <string name="error_unauthorized">未授权，请检查账号/密码或 Token。</string>
+    <string name="error_forbidden">被拒绝，请检查服务器策略或签名配置。</string>
+    <string name="error_rate_limited">请求过于频繁，请稍后再试。</string>
+    <string name="error_bad_request">请求无效，请检查输入。</string>
+    <string name="error_invite_invalid">邀请码无效。</string>
+    <string name="error_register_disabled">服务器已关闭注册。</string>
+    <string name="error_with_request_id">%1$s（请求ID：%2$s）</string>
+    <string name="title_diagnostics">诊断信息</string>
+    <string name="msg_diagnostics_helper">复制摘要用于排查或支持。</string>
+    <string name="action_copy_diagnostics">复制诊断信息</string>
+    <string name="msg_diagnostics_copied">诊断信息已复制。</string>
     <string name="action_send">发送</string>
     <string name="label_bot">机器人</string>
     <string name="error_register_required">需要填写用户 ID 和密码</string>
@@ -140,6 +159,11 @@
     <string name="info_no_hosts_connected">还没有已连接的主机。</string>
     <string name="title_language">语言</string>
     <string name="title_settings">设置</string>
+    <string name="title_public_channel">公共频道</string>
+    <string name="label_public_channel_enabled">启用公共频道</string>
+    <string name="label_public_channel_name">公共频道名称</string>
+    <string name="label_public_channel_id">公共频道 ID</string>
+    <string name="placeholder_public_channel_id">general</string>
     <string name="title_updates">更新</string>
     <string name="title_links">链接</string>
     <string name="status_update_idle">检查 GitHub 最新版本。</string>
@@ -162,4 +186,5 @@
     <string name="disclaimer_body">本服务不保证安全，请注意信息安全风险。</string>
     <string name="action_acknowledge">我知道了</string>
     <string name="action_exit">退出</string>
+    <string name="public_channel_default_name">公共频道</string>
 </resources>

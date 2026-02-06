@@ -15,6 +15,7 @@
     <string name="label_server_url">Server URL</string>
     <string name="placeholder_server_url">http://host:8788</string>
     <string name="default_custom_server_label">custom-server</string>
+    <string name="label_vimalinx_server">Vimalinx server</string>
     <string name="action_add">Add</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_add_host">Add host</string>
@@ -43,6 +44,7 @@
     <string name="title_host_token">Host token</string>
     <string name="msg_host_token">Host: %1$s\nToken: %2$s\nUse this token in Clawdbot.</string>
     <string name="action_copy_token">Copy token</string>
+    <string name="action_copy_message">Copy message</string>
     <string name="action_back">Back</string>
     <string name="title_account">Account</string>
     <string name="title_account_section">Account</string>
@@ -93,6 +95,23 @@
     <string name="status_replied">Replied</string>
     <string name="status_failed">Failed</string>
     <string name="label_message">Message</string>
+    <string name="label_message_public_channel">Message (@all to broadcast)</string>
+    <string name="label_public_channel_broadcast_hint">Broadcasting to all agents.</string>
+    <string name="label_server_url_hint">Server URL format: http://host:8788</string>
+    <string name="title_broadcast_confirm">Send to all agents?</string>
+    <string name="msg_broadcast_confirm">This will broadcast the message to every connected agent.</string>
+    <string name="action_broadcast">Broadcast</string>
+    <string name="error_unauthorized">Unauthorized. Check account/password or token.</string>
+    <string name="error_forbidden">Forbidden. Check server policies or signatures.</string>
+    <string name="error_rate_limited">Too many requests. Please wait and try again.</string>
+    <string name="error_bad_request">Invalid request. Check input values.</string>
+    <string name="error_invite_invalid">Invalid invite code.</string>
+    <string name="error_register_disabled">Registration is disabled on the server.</string>
+    <string name="error_with_request_id">%1$s (req: %2$s)</string>
+    <string name="title_diagnostics">Diagnostics</string>
+    <string name="msg_diagnostics_helper">Copy a summary for support or debugging.</string>
+    <string name="action_copy_diagnostics">Copy diagnostics</string>
+    <string name="msg_diagnostics_copied">Diagnostics copied to clipboard.</string>
     <string name="action_send">Send</string>
     <string name="label_bot">Bot</string>
     <string name="error_register_required">User ID and password required</string>
@@ -140,6 +159,11 @@
     <string name="info_no_hosts_connected">No hosts connected yet.</string>
     <string name="title_language">Language</string>
     <string name="title_settings">Settings</string>
+    <string name="title_public_channel">Public channel</string>
+    <string name="label_public_channel_enabled">Enable public channel</string>
+    <string name="label_public_channel_name">Public channel name</string>
+    <string name="label_public_channel_id">Public channel ID</string>
+    <string name="placeholder_public_channel_id">general</string>
     <string name="title_updates">Updates</string>
     <string name="title_links">Links</string>
     <string name="status_update_idle">Check for the latest GitHub release.</string>
@@ -162,4 +186,5 @@
     <string name="disclaimer_body">This service does not guarantee security. Please protect sensitive information and use at your own risk.</string>
     <string name="action_acknowledge">I understand</string>
     <string name="action_exit">Exit</string>
+    <string name="public_channel_default_name">Public channel</string>
 </resources>
