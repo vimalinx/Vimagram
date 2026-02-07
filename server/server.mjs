@@ -1202,6 +1202,7 @@ const server = createServer(async (req, res) => {
       text: payload.text,
       replyToId: payload.replyToId ?? null,
       receivedAt: now,
+      senderName: payload.senderName ?? null,
     });
     sendJson(res, 200, { ok: true, delivered: true });
     return;

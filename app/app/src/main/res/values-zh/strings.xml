@@ -95,6 +95,7 @@
     <string name="label_message">消息</string>
     <string name="action_send">发送</string>
     <string name="label_bot">机器人</string>
+    <string name="label_ai_with_id">AI · %1$s</string>
     <string name="error_register_required">需要填写用户 ID 和密码</string>
     <string name="error_register_invite_required">需要邀请码</string>
     <string name="error_register_failed_detail">注册失败：%1$s</string>

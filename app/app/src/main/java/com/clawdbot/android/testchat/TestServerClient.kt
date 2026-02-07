@@ -99,6 +99,7 @@ data class TestServerStreamPayload(
   val replyToId: String? = null,
   @SerialName("receivedAt")
   val receivedAtMs: Long? = null,
+  val senderName: String? = null,
 )
 
 class TestServerClient(

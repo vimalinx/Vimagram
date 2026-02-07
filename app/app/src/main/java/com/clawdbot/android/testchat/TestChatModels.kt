@@ -41,6 +41,7 @@ data class TestChatMessage(
   val text: String,
   val timestampMs: Long,
   val senderName: String? = null,
+  val sourceId: String? = null,
   val replyToId: String? = null,
   val deliveryStatus: String? = null,
 )

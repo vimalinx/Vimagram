@@ -901,6 +901,30 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
             if (_snapshot.value.messages.any { it.id == messageId }) {
               return
             }
+            val isPublicChat = chatId.startsWith("public:")
+            val agentId = payload?.senderName?.trim().orEmpty()
+            val senderName =
+              if (isPublicChat && agentId.isNotBlank()) {
+                val sourceId =
+                  if (!agentId.equals(host.label, ignoreCase = true)) {
+                    "${host.label} · ${agentId}"
+                  } else {
+                    host.label
+                  }
+                appString(R.string.label_ai_with_id, sourceId)
+              } else {
+                appString(R.string.label_bot)
+              }
+            val sourceId =
+              if (isPublicChat && agentId.isNotBlank()) {
+                if (!agentId.equals(host.label, ignoreCase = true)) {
+                  "${host.label} · ${agentId}"
+                } else {
+                  host.label
+                }
+              } else {
+                null
+              }
             val message =
               TestChatMessage(
                 id = messageId,
@@ -908,7 +932,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
                 direction = "in",
                 text = output,
                 timestampMs = timestamp,
-                senderName = appString(R.string.label_bot),
+                senderName = senderName,
+                sourceId = sourceId,
                 replyToId = payload?.replyToId,
               )
             acknowledgeLatestOutgoing(chatId, payload?.replyToId)
