@@ -26,7 +26,9 @@ if [[ "${MODE}" != "quick" && "${MODE}" != "manual" ]]; then
 fi
 
 GIT_REPO="${VIMALINX_REPO:-https://github.com/vimalinx/vimalinx-suite-core}"
+GIT_REPO_GITEE="${VIMALINX_REPO_GITEE:-https://gitee.com/mirrors/vimalinx-suite-core}"
 INSTALL_DIR="${VIMALINX_INSTALL_DIR:-/opt/vimalinx-suite-core}"
+GIT_TIMEOUT="${VIMALINX_GIT_TIMEOUT:-120}"
 DATA_DIR="${VIMALINX_DATA_DIR:-/var/lib/vimalinx}"
 USERS_FILE="${VIMALINX_USERS_FILE:-${DATA_DIR}/users.json}"
 PORT="${VIMALINX_PORT:-8788}"
@@ -130,10 +132,21 @@ else
   fi
 fi
 
+git config --global http.lowSpeedLimit 0
+git config --global http.lowSpeedTime ${GIT_TIMEOUT}
+git config --global http.postBuffer 1048576000
+
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
-  git -C "${INSTALL_DIR}" pull --ff-only
+  echo "Updating existing installation at ${INSTALL_DIR}..."
+  timeout ${GIT_TIMEOUT} git -C "${INSTALL_DIR}" pull --ff-only || \
+  timeout ${GIT_TIMEOUT} git -C "${INSTALL_DIR}" fetch origin || true
 else
-  git clone "${GIT_REPO}" "${INSTALL_DIR}"
+  echo "Cloning from ${GIT_REPO}..."
+  timeout ${GIT_TIMEOUT} git clone --depth 1 "${GIT_REPO}" "${INSTALL_DIR}" || \
+  { echo "Primary repo failed. Trying Gitee mirror..." >&2; \
+    timeout ${GIT_TIMEOUT} git clone --depth 1 "${GIT_REPO_GITEE}" "${INSTALL_DIR}" || \
+    { echo "Error: All clone attempts failed. Check network or manually clone." >&2; \
+      echo "Manually clone and set VIMALINX_INSTALL_DIR to your directory." >&2; exit 1; }; }
 fi
 
 mkdir -p "${DATA_DIR}"
