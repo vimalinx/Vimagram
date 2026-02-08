@@ -158,7 +158,7 @@ class TestServerClient(
     }
   }
 
-  suspend fun fetchPublicConfig(serverUrl: String): TestServerPublicConfigResponse {
+  suspend fun fetchPublicConfig(serverUrl: String): TestServerConfigResponse {
     val request =
       Request.Builder()
         .url("${normalizeBaseUrl(serverUrl)}/api/config")
@@ -169,13 +169,13 @@ class TestServerClient(
         val raw = response.body?.string() ?: ""
         val parsed =
           runCatching {
-            json.decodeFromString(TestServerPublicConfigResponse.serializer(), raw)
+            json.decodeFromString(TestServerConfigResponse.serializer(), raw)
           }.getOrNull()
         if (!response.isSuccessful) {
           return@use parsed?.copy(ok = false, error = parsed.error ?: "HTTP ${response.code}")
-            ?: TestServerPublicConfigResponse(ok = false, error = "HTTP ${response.code}")
+            ?: TestServerConfigResponse(ok = false, error = "HTTP ${response.code}")
         }
-        parsed ?: TestServerPublicConfigResponse(ok = false, error = "Invalid response")
+        parsed ?: TestServerConfigResponse(ok = false, error = "Invalid response")
       }
     }
   }

@@ -13,7 +13,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -107,8 +106,6 @@ import androidx.compose.ui.unit.isUnspecified
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.text.method.LinkMovementMethod
 import android.util.TypedValue
 import android.widget.TextView
@@ -153,7 +150,6 @@ fun TestChatApp(viewModel: TestChatViewModel) {
         initialServerUrl = state.account?.serverUrl,
         serverConfig = serverConfig,
         onRefreshServerConfig = viewModel::refreshServerConfig,
-        onClearServerTest = viewModel::clearServerTestMessage,
         onRegister = { serverUrl, userId, inviteCode, password ->
           viewModel.registerAccount(serverUrl, userId, inviteCode, password) { registeredId ->
             registrationUserId = registeredId
@@ -265,15 +261,13 @@ private fun AccountScreen(
   initialServerUrl: String?,
   serverConfig: TestServerConfigState,
   onRefreshServerConfig: (String) -> Unit,
-  onClearServerTest: () -> Unit,
   onRegister: (serverUrl: String, userId: String, inviteCode: String, password: String) -> Unit,
   onLogin: (serverUrl: String, userId: String, password: String) -> Unit,
   onTestServer: (serverUrl: String) -> Unit,
   onClearServerTest: () -> Unit,
   onFetchServerConfig: (serverUrl: String) -> Unit,
 ) {
-  val vimalinxServerLabel = stringResource(R.string.label_vimalinx_server)
-  val serverOptions = remember(vimalinxServerLabel) {
+  val serverOptions = remember {
     mutableStateListOf(
       ServerOption(label = "Direct", url = DEFAULT_SERVER_URL),
     )

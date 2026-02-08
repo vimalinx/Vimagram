@@ -25,6 +25,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.sse.EventSource
@@ -85,6 +86,7 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
   private val _activeChatId = MutableStateFlow<String?>(null)
   private val _isInForeground = MutableStateFlow(true)
   private val _tokenUsage = MutableStateFlow<Map<String, TestChatTokenUsage>>(emptyMap())
+  private val _serverConfig = MutableStateFlow(TestServerConfigState())
   private val _inviteRequired = MutableStateFlow<Boolean?>(null)
   private val _serverTestMessage = MutableStateFlow<String?>(null)
   private val _serverTestSuccess = MutableStateFlow<Boolean?>(null)
@@ -196,18 +198,14 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     val normalizedUser = userId.trim()
     val normalizedInvite = inviteCode.trim()
     val normalizedPassword = password.trim()
-    val inviteRequired = _inviteRequired.value == true
-    if (
-      normalizedUser.isBlank() ||
-        (inviteRequired && normalizedInvite.isBlank()) ||
-        normalizedPassword.length < 6
-    ) {
+    val config = _serverConfig.value
+    val inviteRequired =
+      _inviteRequired.value == true ||
+        (config.serverUrl == normalizedServer && config.inviteRequired == true)
+    if (normalizedUser.isBlank() || normalizedPassword.length < 6) {
       _errorText.value = appString(R.string.error_register_required)
       return
     }
-    val config = _serverConfig.value
-    val inviteRequired =
-      config.serverUrl == normalizedServer && config.inviteRequired == true
     if (inviteRequired && normalizedInvite.isBlank()) {
       _errorText.value = appString(R.string.error_register_invite_required)
       return
@@ -890,14 +888,27 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
               payload?.id?.trim().orEmpty()
                 .ifBlank { id?.trim().orEmpty() }
                 .ifBlank { UUID.randomUUID().toString() }
-            val messageId = "${normalizeHostLabel(host.label)}:${rawMessageId}"
             val eventId = id?.toLongOrNull() ?: payload?.id?.toLongOrNull()
             if (eventId != null) {
               prefs.saveLastEventId(host.label, eventId)
             }
             val rawChatId = payload?.chatId.orEmpty()
             val chatId = resolveChatIdForHost(host.label, rawChatId)
+            if (chatId.startsWith("machine:")) {
+              val machine = parseChatIdentity(chatId).machine
+              val currentHost = normalizeHostLabel(host.label)
+              if (
+                !machine.equals(currentHost, ignoreCase = true) &&
+                  _hosts.value.any { it.label.equals(machine, ignoreCase = true) }
+              ) {
+                // Prevent cross-talk: a stream should not surface messages owned by another known host.
+                return
+              }
+            }
             val timestamp = payload?.receivedAtMs ?: System.currentTimeMillis()
+            val dedupeHint = payload?.receivedAtMs?.toString() ?: output
+            val messageId =
+              "${normalizeHostLabel(host.label)}:${rawMessageId}:${chatId}:${dedupeHint.hashCode()}"
             if (_snapshot.value.messages.any { it.id == messageId }) {
               return
             }
@@ -1140,8 +1151,22 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     val trimmed = rawChatId.trim()
     val normalizedHost = normalizeHostLabel(hostLabel)
     if (trimmed.isBlank()) return defaultChatId(normalizedHost)
-    if (trimmed.startsWith("machine:") || trimmed.startsWith("device:")) return trimmed
-    if (trimmed.contains("/") || trimmed.contains("|")) return trimmed
+    if (
+      trimmed.startsWith("machine:") ||
+        trimmed.startsWith("device:") ||
+        trimmed.startsWith("public:")
+    ) {
+      return trimmed
+    }
+    if (trimmed.contains("/") || trimmed.contains("|")) {
+      val separator = if (trimmed.contains("/")) "/" else "|"
+      val machine = trimmed.substringBefore(separator).trim()
+      val session = trimmed.substringAfter(separator).trim().ifBlank { "main" }
+      if (machine.isNotBlank() && !machine.contains(":")) {
+        return "machine:${normalizeHostLabel(machine)}/${session}"
+      }
+      return trimmed
+    }
     if (normalizedHost == "default") return trimmed
     if (trimmed.startsWith("user:") || trimmed.startsWith("vimalinx:")) {
       val session = trimmed.substringAfter(":").ifBlank { "main" }
