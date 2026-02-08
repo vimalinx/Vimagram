@@ -555,10 +555,6 @@ function normalizeChatId(userId, chatId) {
   return `user:${userId}`;
 }
 
-function chatOwnerScopedKey(chatId, tokenHash) {
-  return `${chatId}::${tokenHash}`;
-}
-
 function extractUserIdFromChatId(chatId) {
   if (!chatId) return null;
   const trimmed = chatId.trim();
@@ -572,23 +568,14 @@ function resolvePrimaryToken(user) {
   return tokens[0] ?? null;
 }
 
-function resolveOwnerForChatId(chatId, token) {
+function resolveOwnerForChatId(chatId) {
   if (!chatId) return null;
-  const normalizedChatId = chatId.trim();
-  const tokenHash = normalizeTokenHash(token);
-  if (tokenHash) {
-    const scoped = chatOwners.get(chatOwnerScopedKey(normalizedChatId, tokenHash));
-    if (scoped) {
-      const scopedUser = users.get(scoped.userId);
-      if (scopedUser) return { user: scopedUser, deviceKey: scoped.deviceKey };
-    }
-  }
-  const mapped = chatOwners.get(normalizedChatId);
+  const mapped = chatOwners.get(chatId);
   if (mapped) {
     const mappedUser = users.get(mapped.userId);
     if (mappedUser) return { user: mappedUser, deviceKey: mapped.deviceKey };
   }
-  const directId = extractUserIdFromChatId(normalizedChatId);
+  const directId = extractUserIdFromChatId(chatId);
   if (directId) {
     const direct = users.get(directId);
     if (direct) {
@@ -751,10 +738,6 @@ function notifyInboundWaiters(deviceKey) {
 
 function buildInboundMessage(payload, user, deviceKey) {
   const chatId = normalizeChatId(user.id, payload.chatId);
-  const token = extractTokenFromDeviceKey(deviceKey);
-  if (token) {
-    chatOwners.set(chatOwnerScopedKey(chatId, token), { userId: user.id, deviceKey });
-  }
   chatOwners.set(chatId, { userId: user.id, deviceKey });
   const senderName = payload.senderName?.trim() || user.displayName || user.id;
   const chatName = payload.chatName?.trim() || undefined;
@@ -1185,8 +1168,7 @@ const server = createServer(async (req, res) => {
       sendJson(res, 400, { error: "chatId and text required" });
       return;
     }
-    const providedSecret = readBearerToken(req);
-    const owner = resolveOwnerForChatId(payload.chatId, providedSecret);
+    const owner = resolveOwnerForChatId(payload.chatId);
     if (!owner) {
       const userId = extractUserIdFromChatId(payload.chatId);
       if (!userId) {
@@ -1203,18 +1185,6 @@ const server = createServer(async (req, res) => {
     }
     if (!verifyServerToken(req, owner.user)) {
       sendJson(res, 401, { error: "unauthorized" });
-      return;
-    }
-    const ownerToken = extractTokenFromDeviceKey(owner.deviceKey);
-    const providedToken = normalizeTokenHash(providedSecret);
-    const usingServerToken = Boolean(serverToken && providedSecret === serverToken);
-    if (
-      !usingServerToken &&
-      ownerToken &&
-      providedToken &&
-      ownerToken !== providedToken
-    ) {
-      sendJson(res, 409, { error: "chatId is bound to a different host token" });
       return;
     }
     const now = Date.now();
