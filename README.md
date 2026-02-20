@@ -256,6 +256,8 @@ bash scripts/deploy-openclaw-node.sh --server-url http://49.235.88.239:18788 --t
 bash scripts/deploy-openclaw-node-interactive.sh
 ```
 
+默认只需要输入「机器贡献者 token」即可自动连接服务器并拉取配置。
+
 机器贡献者 token 由服务器 GUI 生成：
 
 ```text
