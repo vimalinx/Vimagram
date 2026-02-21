@@ -181,7 +181,7 @@
     <div class="shell">
       <section class="card">
         <h1>VimaClawNet 机器池控制台</h1>
-        <p class="sub">查看在线 OpenClaw 机器，按 quick/code/deep 模式做简单路由与模型提示配置。</p>
+        <p class="sub">查看在线 OpenClaw 机器，按 quick/code/deep 或 inst_*（模型档位）做路由与模型提示配置。</p>
         <div class="top-links">
           <a href="/">返回聊天页</a>
           <a href="/healthz" target="_blank" rel="noopener noreferrer">健康检查</a>
@@ -269,6 +269,27 @@
                 <td><input id="deepAgent" /></td>
                 <td><input id="deepSkills" /></td>
               </tr>
+              <tr>
+                <td class="mode">inst_m2_5</td>
+                <td><input id="inst_m2_5Account" /></td>
+                <td><input id="inst_m2_5Model" /></td>
+                <td><input id="inst_m2_5Agent" /></td>
+                <td><input id="inst_m2_5Skills" /></td>
+              </tr>
+              <tr>
+                <td class="mode">inst_glm_4_7</td>
+                <td><input id="inst_glm_4_7Account" /></td>
+                <td><input id="inst_glm_4_7Model" /></td>
+                <td><input id="inst_glm_4_7Agent" /></td>
+                <td><input id="inst_glm_4_7Skills" /></td>
+              </tr>
+              <tr>
+                <td class="mode">inst_glm_5</td>
+                <td><input id="inst_glm_5Account" /></td>
+                <td><input id="inst_glm_5Model" /></td>
+                <td><input id="inst_glm_5Agent" /></td>
+                <td><input id="inst_glm_5Skills" /></td>
+              </tr>
             </tbody>
           </table>
 
@@ -301,7 +322,7 @@
     </div>
 
     <script>
-      const modes = ["quick", "code", "deep"];
+      const modes = ["quick", "code", "deep", "inst_m2_5", "inst_glm_4_7", "inst_glm_5"];
       const state = {
         machines: [],
         selectedMachineId: "",

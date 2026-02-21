@@ -1,6 +1,7 @@
 {
   "id": "vimalinx",
   "channels": ["vimalinx"],
+  "skills": ["skills"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

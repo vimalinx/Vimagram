@@ -24,6 +24,14 @@ const machinesFilePath =
     : usersFilePath
       ? resolve(dirname(usersFilePath), "machines.json")
       : resolve(__dirname, "machines.json"));
+
+const instancesFilePath =
+  process.env.TEST_INSTANCES_FILE?.trim() ||
+  (usersWritePath
+    ? resolve(dirname(usersWritePath), "instances.json")
+    : usersFilePath
+      ? resolve(dirname(usersFilePath), "instances.json")
+      : resolve(__dirname, "instances.json"));
 const allowRegistration = (process.env.TEST_ALLOW_REGISTRATION ?? "true").toLowerCase() === "true";
 const hmacSecret = process.env.TEST_HMAC_SECRET?.trim();
 const requireSignature = (process.env.TEST_REQUIRE_SIGNATURE ?? "").trim().toLowerCase();
@@ -39,9 +47,11 @@ const inviteCodes = normalizeInviteCodes(
 
 const users = new Map();
 const machines = new Map();
+const instances = new Map();
 let didMigrateUsers = false;
 let pendingUsersSave = null;
 let pendingMachinesSave = null;
+let pendingInstancesSave = null;
 
 if (!hasSecretKey) {
   console.log("warning: TEST_SECRET_KEY not set; token hashing is disabled.");
@@ -284,6 +294,77 @@ function loadMachines() {
 
 loadMachines();
 
+function resolveInstanceKey(userId, chatId) {
+  return `${userId}:${chatId}`;
+}
+
+const INSTANCE_TIERS = [
+  { id: "m2.5", label: "Standard", modelHint: "minimax/m2.5" },
+  { id: "glm-4.7", label: "Pro", modelHint: "zai/glm-4.7" },
+  { id: "glm-5", label: "Max", modelHint: "zai/glm-5" },
+];
+
+const INSTANCE_IDENTITIES = [
+  {
+    id: "ecom",
+    label: "E-commerce",
+    agentHint: "ecom",
+    skillsHint: "ecom: listings, ads, pricing, seo",
+  },
+  {
+    id: "docs",
+    label: "Writing",
+    agentHint: "docs",
+    skillsHint: "docs: contracts, proposals, formal writing",
+  },
+  {
+    id: "media",
+    label: "Creator",
+    agentHint: "media",
+    skillsHint: "media: scripts, captions, hooks, content calendar",
+  },
+];
+
+function normalizeInstanceTierId(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!trimmed) return null;
+  return INSTANCE_TIERS.some((t) => t.id === trimmed) ? trimmed : null;
+}
+
+function normalizeInstanceIdentityId(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!trimmed) return null;
+  return INSTANCE_IDENTITIES.some((t) => t.id === trimmed) ? trimmed : null;
+}
+
+function normalizeInstanceRecord(entry) {
+  const userId = normalizeUserId(entry.userId);
+  const chatId = typeof entry.chatId === "string" ? entry.chatId.trim() : "";
+  const modelTierId = normalizeInstanceTierId(entry.modelTierId);
+  const identityId = normalizeInstanceIdentityId(entry.identityId);
+  const now = Date.now();
+  const createdAt = normalizeUsageNumber(entry.createdAt) ?? now;
+  const updatedAt = normalizeUsageNumber(entry.updatedAt) ?? createdAt;
+  if (!userId || !chatId || !modelTierId || !identityId) return null;
+  return { userId, chatId, modelTierId, identityId, createdAt, updatedAt };
+}
+
+function loadInstances() {
+  if (!instancesFilePath) return;
+  try {
+    const raw = readFileSync(instancesFilePath, "utf-8");
+    const parsed = parseJson(raw);
+    for (const entry of parsed?.instances ?? []) {
+      const normalized = normalizeInstanceRecord(entry);
+      if (!normalized) continue;
+      instances.set(resolveInstanceKey(normalized.userId, normalized.chatId), normalized);
+    }
+  } catch {
+  }
+}
+
+loadInstances();
+
 function normalizeUserId(value) {
   const trimmed = value?.trim();
   if (!trimmed) return null;
@@ -503,6 +584,62 @@ function scheduleMachinesSave() {
     } catch {
     }
   }, 1000);
+}
+
+function scheduleInstancesSave() {
+  if (!instancesFilePath) return;
+  if (pendingInstancesSave) return;
+  pendingInstancesSave = setTimeout(() => {
+    pendingInstancesSave = null;
+    try {
+      mkdirSync(dirname(instancesFilePath), { recursive: true });
+      const entries = [...instances.values()].sort((a, b) => {
+        if (a.userId !== b.userId) return a.userId.localeCompare(b.userId);
+        return a.chatId.localeCompare(b.chatId);
+      });
+      const data = JSON.stringify({ instances: entries }, null, 2);
+      writeFileSync(instancesFilePath, data, "utf-8");
+    } catch {
+    }
+  }, 250);
+}
+
+function upsertInstanceConfig(params) {
+  const key = resolveInstanceKey(params.userId, params.chatId);
+  const existing = instances.get(key);
+  const now = Date.now();
+  const next = {
+    userId: params.userId,
+    chatId: params.chatId,
+    modelTierId: params.modelTierId,
+    identityId: params.identityId,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+  instances.set(key, next);
+  scheduleInstancesSave();
+  return next;
+}
+
+function encodeInstanceModeId(config) {
+  const tier = String(config.modelTierId || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
+  const identity = String(config.identityId || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
+  return `inst_${tier}_${identity}`;
+}
+
+function resolveInstanceModeMetadata(config) {
+  const tier = INSTANCE_TIERS.find((t) => t.id === config.modelTierId);
+  const identity = INSTANCE_IDENTITIES.find((i) => i.id === config.identityId);
+  const tierLabel = tier?.label ?? config.modelTierId;
+  const identityLabel = identity?.label ?? config.identityId;
+  const modeId = encodeInstanceModeId(config);
+  return {
+    modeId,
+    modeLabel: `${tierLabel} · ${identityLabel}`,
+    modelHint: tier?.modelHint,
+    agentHint: identity?.agentHint,
+    skillsHint: identity?.skillsHint,
+  };
 }
 
 function upsertMachineRecord(params) {
@@ -976,7 +1113,8 @@ function buildInboundMessage(payload, user, deviceKey) {
   const senderName = payload.senderName?.trim() || user.displayName || user.id;
   const chatName = payload.chatName?.trim() || undefined;
   const id = typeof payload.id === "string" ? payload.id.trim() : undefined;
-  const modeMetadata = resolveModeMetadata(payload);
+  const instance = instances.get(resolveInstanceKey(user.id, chatId));
+  const modeMetadata = instance ? resolveInstanceModeMetadata(instance) : resolveModeMetadata(payload);
   return {
     id,
     chatId,
@@ -1760,6 +1898,19 @@ const server = createServer(async (req, res) => {
       lastInboundAt: now,
     });
     const deviceKey = makeDeviceKey(auth.user.id, auth.secret);
+
+    const modelTierId = normalizeInstanceTierId(payload?.instanceModelTierId);
+    const identityId = normalizeInstanceIdentityId(payload?.instanceIdentityId);
+    const normalizedChatId = normalizeChatId(auth.user.id, payload?.chatId);
+    if (modelTierId && identityId && normalizedChatId) {
+      upsertInstanceConfig({
+        userId: auth.user.id,
+        chatId: normalizedChatId,
+        modelTierId,
+        identityId,
+      });
+    }
+
     const message = buildInboundMessage(
       {
         ...payload,
