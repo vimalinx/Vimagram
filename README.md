@@ -258,6 +258,26 @@ bash scripts/deploy-openclaw-node-interactive.sh
 
 默认只需要输入「机器贡献者 token」即可自动连接服务器并拉取配置。
 
+脚本执行完成后会在目标用户主目录生成交互式入口：
+
+```bash
+bash ~/install.sh
+```
+
+之后重装/换服可直接运行这个 `install.sh`。
+
+如需“先备份 OpenClaw 配置再重装配置”，可在一键脚本里加：
+
+```bash
+sudo bash scripts/deploy-openclaw-node.sh \
+  --server-url http://49.235.88.239:18788 \
+  --token <机器贡献者token> \
+  --backup-config true \
+  --reinstall-config true
+```
+
+备份文件默认保存到：`~/.openclaw/backups/openclaw.<timestamp>.json`
+
 机器贡献者 token 由服务器 GUI 生成：
 
 ```text

@@ -101,6 +101,8 @@ INBOUND_MODE="${DEFAULT_INBOUND_MODE}"
 MACHINE_ID=""
 MACHINE_LABEL=""
 INSTALL_OPENCLAW="true"
+BACKUP_CONFIG="true"
+REINSTALL_CONFIG="false"
 
 ADVANCED="$(ask_yes_no "Configure advanced options" "N")"
 if [[ "${ADVANCED}" == "true" ]]; then
@@ -112,6 +114,8 @@ if [[ "${ADVANCED}" == "true" ]]; then
   MACHINE_ID="$(ask_optional "Machine ID (optional)")"
   MACHINE_LABEL="$(ask_optional "Machine label (optional)")"
   INSTALL_OPENCLAW="$(ask_yes_no "Install OpenClaw CLI if missing" "Y")"
+  BACKUP_CONFIG="$(ask_yes_no "Backup OpenClaw config before install" "Y")"
+  REINSTALL_CONFIG="$(ask_yes_no "Reinstall OpenClaw config (reset then apply)" "N")"
 fi
 
 echo
@@ -131,6 +135,8 @@ if [[ -n "${MACHINE_LABEL}" ]]; then
   echo "- Machine label: ${MACHINE_LABEL}"
 fi
 echo "- Install OpenClaw if missing: ${INSTALL_OPENCLAW}"
+echo "- Backup OpenClaw config: ${BACKUP_CONFIG}"
+echo "- Reinstall OpenClaw config: ${REINSTALL_CONFIG}"
 
 PROCEED="$(ask_yes_no "Run deployment now" "Y")"
 if [[ "${PROCEED}" != "true" ]]; then
@@ -146,6 +152,8 @@ cmd=(
   --target-user "${TARGET_USER}"
   --repo-url "${REPO_URL}"
   --inbound-mode "${INBOUND_MODE}"
+  --backup-config "${BACKUP_CONFIG}"
+  --reinstall-config "${REINSTALL_CONFIG}"
 )
 
 if [[ -n "${REPO_DIR}" ]]; then

@@ -24,13 +24,18 @@ Options:
   --inbound-mode <poll|webhook>  Channel inbound mode (default: poll)
   --auto-register <bool>         Auto register when login missing (default: true)
   --install-openclaw <bool>      Install openclaw if missing (default: true)
+  --backup-config <bool>         Backup openclaw config before install (default: true)
+  --reinstall-config <bool>      Reinitialize openclaw config before apply (default: false)
+  --home-install-script <path>   Write interactive launcher (default: ~/install.sh)
 
 Environment aliases:
   VIMALINX_SERVER_URL, VIMALINX_REPO, VIMALINX_REPO_DIR, VIMALINX_TARGET_USER,
   VIMALINX_USER_ID, VIMALINX_PASSWORD, VIMALINX_TOKEN, VIMALINX_DISPLAY_NAME,
   VIMALINX_INVITE_CODE, VIMALINX_SERVER_TOKEN, VIMALINX_MACHINE_ID,
   VIMALINX_MACHINE_LABEL, VIMALINX_INBOUND_MODE,
-  VIMALINX_AUTO_REGISTER, VIMALINX_INSTALL_OPENCLAW
+  VIMALINX_AUTO_REGISTER, VIMALINX_INSTALL_OPENCLAW,
+  VIMALINX_BACKUP_OPENCLAW_CONFIG, VIMALINX_REINSTALL_OPENCLAW_CONFIG,
+  VIMALINX_HOME_INSTALL_SCRIPT
 EOF
 }
 
@@ -112,6 +117,31 @@ else:
 PY
 }
 
+write_home_install_launcher() {
+  local launcher_path="$1"
+  local repo_dir="$2"
+  local target_user="$3"
+
+  run_root mkdir -p "$(dirname "${launcher_path}")"
+  run_root tee "${launcher_path}" >/dev/null <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_DIR="${repo_dir}"
+INSTALLER="\${REPO_DIR}/scripts/deploy-openclaw-node-interactive.sh"
+
+if [[ ! -f "\${INSTALLER}" ]]; then
+  echo "Missing installer script: \${INSTALLER}" >&2
+  echo "Run the bootstrap deploy command again." >&2
+  exit 1
+fi
+
+exec bash "\${INSTALLER}" "\$@"
+EOF
+  run_root chmod 755 "${launcher_path}"
+  run_root chown "${target_user}:${target_user}" "${launcher_path}" >/dev/null 2>&1 || true
+}
+
 SERVER_URL="${VIMALINX_SERVER_URL:-http://49.235.88.239:18788}"
 REPO_URL="${VIMALINX_REPO:-https://github.com/vimalinx/ClawNet.git}"
 REPO_DIR="${VIMALINX_REPO_DIR:-}"
@@ -127,6 +157,11 @@ MACHINE_LABEL="${VIMALINX_MACHINE_LABEL:-}"
 INBOUND_MODE="${VIMALINX_INBOUND_MODE:-poll}"
 AUTO_REGISTER="${VIMALINX_AUTO_REGISTER:-true}"
 INSTALL_OPENCLAW="${VIMALINX_INSTALL_OPENCLAW:-true}"
+RUN_OPENCLAW_ONBOARD="${VIMALINX_RUN_OPENCLAW_ONBOARD:-true}"
+OPENCLAW_GATEWAY_BIND="${VIMALINX_OPENCLAW_GATEWAY_BIND:-loopback}"
+HOME_INSTALL_SCRIPT="${VIMALINX_HOME_INSTALL_SCRIPT:-}"
+BACKUP_OPENCLAW_CONFIG="${VIMALINX_BACKUP_OPENCLAW_CONFIG:-true}"
+REINSTALL_OPENCLAW_CONFIG="${VIMALINX_REINSTALL_OPENCLAW_CONFIG:-false}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -145,6 +180,9 @@ while [[ $# -gt 0 ]]; do
     --inbound-mode) INBOUND_MODE="${2:-}"; shift 2 ;;
     --auto-register) AUTO_REGISTER="${2:-}"; shift 2 ;;
     --install-openclaw) INSTALL_OPENCLAW="${2:-}"; shift 2 ;;
+    --backup-config) BACKUP_OPENCLAW_CONFIG="${2:-}"; shift 2 ;;
+    --reinstall-config) REINSTALL_OPENCLAW_CONFIG="${2:-}"; shift 2 ;;
+    --home-install-script) HOME_INSTALL_SCRIPT="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown argument: $1" >&2
@@ -184,10 +222,18 @@ if [[ -z "${TARGET_HOME}" ]]; then
   exit 1
 fi
 
-OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG:-${TARGET_HOME}/.openclaw/openclaw.json}"
+OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-${OPENCLAW_CONFIG:-${CLAWDBOT_CONFIG_PATH:-${TARGET_HOME}/.openclaw/openclaw.json}}}"
 
 if [[ -z "${REPO_DIR}" ]]; then
   REPO_DIR="${TARGET_HOME}/vimalinx-suite-core"
+fi
+if [[ -z "${HOME_INSTALL_SCRIPT}" ]]; then
+  HOME_INSTALL_SCRIPT="${TARGET_HOME}/install.sh"
+fi
+
+if is_true "${REINSTALL_OPENCLAW_CONFIG}" && ! is_true "${BACKUP_OPENCLAW_CONFIG}"; then
+  echo "Reinstall requested; forcing config backup for safety."
+  BACKUP_OPENCLAW_CONFIG="true"
 fi
 
 SERVER_URL="$(normalize_url "${SERVER_URL}")"
@@ -197,6 +243,23 @@ ensure_node22
 
 if is_true "${INSTALL_OPENCLAW}" && ! command -v openclaw >/dev/null 2>&1; then
   run_root npm install -g openclaw@latest
+fi
+
+if is_true "${RUN_OPENCLAW_ONBOARD}"; then
+  run_as_target "${TARGET_USER}" "${TARGET_HOME}" \
+    env OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH}" \
+      openclaw onboard \
+        --mode local \
+        --non-interactive \
+        --accept-risk \
+        --install-daemon \
+        --skip-channels \
+        --skip-skills \
+        --skip-ui \
+        --skip-health \
+        --gateway-bind "${OPENCLAW_GATEWAY_BIND}" \
+        --auth-choice skip \
+        >/dev/null 2>&1
 fi
 
 if [[ -d "${REPO_DIR}/.git" ]]; then
@@ -295,60 +358,18 @@ PY
 fi
 
 run_as_target "${TARGET_USER}" "${TARGET_HOME}" \
-  env VIMALINX_SERVER_URL="${SERVER_URL}" \
+  env OPENCLAW_CONFIG_PATH="${OPENCLAW_CONFIG_PATH}" \
+    VIMALINX_SERVER_URL="${SERVER_URL}" \
     VIMALINX_TOKEN="${TOKEN}" \
     VIMALINX_INBOUND_MODE="${INBOUND_MODE}" \
+    VIMALINX_MACHINE_ID="${MACHINE_ID}" \
+    VIMALINX_MACHINE_LABEL="${MACHINE_LABEL}" \
+    VIMALINX_BACKUP_OPENCLAW_CONFIG="${BACKUP_OPENCLAW_CONFIG}" \
+    VIMALINX_REINSTALL_OPENCLAW_CONFIG="${REINSTALL_OPENCLAW_CONFIG}" \
     VIMALINX_FORCE_OVERWRITE=1 \
     bash "${REPO_DIR}/install.sh"
 
-run_as_target "${TARGET_USER}" "${TARGET_HOME}" python3 - "${OPENCLAW_CONFIG_PATH}" "${MACHINE_ID}" "${MACHINE_LABEL}" "${USER_ID}" "${TOKEN}" "${INBOUND_MODE}" <<'PY'
-import json
-import os
-import sys
-
-config_path, machine_id, machine_label, user_id, token, inbound_mode = sys.argv[1:7]
-
-cfg = {}
-if os.path.exists(config_path):
-  with open(config_path, "r", encoding="utf-8") as f:
-    try:
-      cfg = json.load(f)
-    except json.JSONDecodeError:
-      cfg = {}
-
-channels = cfg.get("channels")
-if not isinstance(channels, dict):
-  channels = {}
-
-vimalinx = channels.get("vimalinx")
-if not isinstance(vimalinx, dict):
-  vimalinx = {}
-
-vimalinx["enabled"] = True
-if user_id:
-  vimalinx["userId"] = user_id
-if token:
-  vimalinx["token"] = token
-if inbound_mode in {"poll", "webhook"}:
-  vimalinx["inboundMode"] = inbound_mode
-vimalinx["autoRegisterMachine"] = True
-if "machineHeartbeatMs" not in vimalinx:
-  vimalinx["machineHeartbeatMs"] = 30000
-if machine_id:
-  vimalinx["machineId"] = machine_id
-if machine_label:
-  vimalinx["machineLabel"] = machine_label
-
-channels["vimalinx"] = vimalinx
-cfg["channels"] = channels
-
-config_dir = os.path.dirname(config_path)
-if config_dir:
-  os.makedirs(config_dir, exist_ok=True)
-with open(config_path, "w", encoding="utf-8") as f:
-  json.dump(cfg, f, indent=2, ensure_ascii=True)
-  f.write("\n")
-PY
+write_home_install_launcher "${HOME_INSTALL_SCRIPT}" "${REPO_DIR}" "${TARGET_USER}"
 
 echo
 echo "Done."
@@ -357,3 +378,6 @@ echo "- Server URL: ${SERVER_URL}"
 echo "- User ID: ${USER_ID:-unknown}"
 echo "- Machine ID: ${MACHINE_ID:-auto-by-plugin}"
 echo "- OpenClaw plugin installed and configured"
+echo "- Interactive installer: ${HOME_INSTALL_SCRIPT}"
+echo "- Config backup before install: ${BACKUP_OPENCLAW_CONFIG}"
+echo "- Config reinstall mode: ${REINSTALL_OPENCLAW_CONFIG}"
