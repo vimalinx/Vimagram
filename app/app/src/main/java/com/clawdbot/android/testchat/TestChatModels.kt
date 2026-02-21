@@ -52,6 +52,8 @@ data class TestChatThread(
   val title: String,
   val lastMessage: String,
   val lastTimestampMs: Long,
+  val instanceModelTierId: String? = null,
+  val instanceIdentityId: String? = null,
   val unreadCount: Int = 0,
   val isPinned: Boolean = false,
   val isArchived: Boolean = false,

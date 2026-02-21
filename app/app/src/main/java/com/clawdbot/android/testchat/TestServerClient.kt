@@ -29,6 +29,8 @@ data class TestServerSendPayload(
   val modelHint: String? = null,
   val agentHint: String? = null,
   val skillsHint: String? = null,
+  val instanceModelTierId: String? = null,
+  val instanceIdentityId: String? = null,
 )
 
 @Serializable
@@ -371,6 +373,8 @@ class TestServerClient(
     senderName: String?,
     messageId: String?,
     mode: TestChatModeOption?,
+    instanceModelTierId: String? = null,
+    instanceIdentityId: String? = null,
   ): Response {
     val payload =
       TestServerSendPayload(
@@ -386,6 +390,8 @@ class TestServerClient(
         modelHint = mode?.modelHint,
         agentHint = mode?.agentHint,
         skillsHint = mode?.skillsHint,
+        instanceModelTierId = instanceModelTierId,
+        instanceIdentityId = instanceIdentityId,
       )
     val body = json.encodeToString(TestServerSendPayload.serializer(), payload)
       .toRequestBody(jsonMediaType)

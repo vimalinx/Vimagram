@@ -48,7 +48,7 @@ fun ChatMessageListCard(
     shape = MaterialTheme.shapes.large,
     colors =
       CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surface,
       ),
     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
   ) {

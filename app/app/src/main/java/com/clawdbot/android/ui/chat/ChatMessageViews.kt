@@ -3,6 +3,7 @@ package com.clawdbot.android.ui.chat
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -90,7 +91,8 @@ fun ChatTypingIndicatorBubble() {
   Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
     Surface(
       shape = RoundedCornerShape(16.dp),
-      color = MaterialTheme.colorScheme.surfaceContainer,
+      color = MaterialTheme.colorScheme.surface,
+      border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     ) {
       Row(
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -114,7 +116,8 @@ fun ChatPendingToolsBubble(toolCalls: List<ChatPendingToolCall>) {
   Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
     Surface(
       shape = RoundedCornerShape(16.dp),
-      color = MaterialTheme.colorScheme.surfaceContainer,
+      color = MaterialTheme.colorScheme.surface,
+      border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     ) {
       Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Running tools…", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
@@ -153,7 +156,8 @@ fun ChatStreamingAssistantBubble(text: String) {
   Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
     Surface(
       shape = RoundedCornerShape(16.dp),
-      color = MaterialTheme.colorScheme.surfaceContainer,
+      color = MaterialTheme.colorScheme.surface,
+      border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     ) {
       Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
         ChatMarkdown(text = text, textColor = MaterialTheme.colorScheme.onSurface)
@@ -170,7 +174,7 @@ private fun bubbleBackground(isUser: Boolean): Brush {
     )
   } else {
     Brush.linearGradient(
-      colors = listOf(MaterialTheme.colorScheme.surfaceContainer, MaterialTheme.colorScheme.surfaceContainerHigh),
+      colors = listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surface),
     )
   }
 }
@@ -238,7 +242,8 @@ private fun PulseDot(alpha: Float) {
 fun ChatCodeBlock(code: String, language: String?) {
   Surface(
     shape = RoundedCornerShape(12.dp),
-    color = MaterialTheme.colorScheme.surfaceContainerLowest,
+    color = MaterialTheme.colorScheme.surface,
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     modifier = Modifier.fillMaxWidth(),
   ) {
     Text(

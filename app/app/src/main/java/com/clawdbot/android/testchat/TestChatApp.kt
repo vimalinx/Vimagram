@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,6 +54,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -110,11 +112,14 @@ import android.content.Context
 import android.text.method.LinkMovementMethod
 import android.util.TypedValue
 import android.widget.TextView
+import androidx.compose.foundation.BorderStroke
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.linkify.LinkifyPlugin
 import java.net.URI
+import com.clawdbot.android.ui.ManusColors
+import com.clawdbot.android.ui.manusBorder
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -334,11 +339,7 @@ private fun AccountScreen(
     modifier =
       Modifier
         .fillMaxSize()
-        .background(
-          Brush.verticalGradient(
-            listOf(Color(0xFFEEF6FF), Color(0xFFF8FAFF), Color(0xFFF1F5F9)),
-          ),
-        )
+        .background(manusBackgroundBrush)
         .statusBarsPadding(),
   ) {
     Column(
@@ -349,7 +350,7 @@ private fun AccountScreen(
       Text(
         text = stringResource(R.string.app_name),
         style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.SemiBold),
-        color = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.onBackground,
       )
       Text(
         text = stringResource(R.string.account_welcome),
@@ -358,9 +359,10 @@ private fun AccountScreen(
       )
 
       Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
       ) {
         Column(
           modifier = Modifier.fillMaxWidth().padding(20.dp),
@@ -412,11 +414,44 @@ private fun AccountScreen(
           ) {
             Text(stringResource(R.string.action_quick_start))
           }
-          Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(onClick = { isLogin = false }) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+          ) {
+            OutlinedButton(
+              onClick = { isLogin = false },
+              modifier = Modifier.weight(1f),
+              border =
+                BorderStroke(
+                  1.dp,
+                  if (!isLogin) Color.Transparent else MaterialTheme.colorScheme.outline,
+                ),
+              colors =
+                ButtonDefaults.outlinedButtonColors(
+                  containerColor =
+                    if (!isLogin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                  contentColor =
+                    if (!isLogin) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                ),
+            ) {
               Text(stringResource(R.string.action_register))
             }
-            TextButton(onClick = { isLogin = true }) {
+            OutlinedButton(
+              onClick = { isLogin = true },
+              modifier = Modifier.weight(1f),
+              border =
+                BorderStroke(
+                  1.dp,
+                  if (isLogin) Color.Transparent else MaterialTheme.colorScheme.outline,
+                ),
+              colors =
+                ButtonDefaults.outlinedButtonColors(
+                  containerColor =
+                    if (isLogin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                  contentColor =
+                    if (isLogin) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                ),
+            ) {
               Text(stringResource(R.string.action_login))
             }
           }
@@ -555,7 +590,7 @@ private fun ChatListScreen(
         },
         colors =
           TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = Color.Transparent,
           ),
       )
     },
@@ -569,165 +604,169 @@ private fun ChatListScreen(
         }
       }
     },
-    containerColor = MaterialTheme.colorScheme.background,
+    containerColor = Color.Transparent,
   ) { padding ->
-    Column(
+    Box(
       modifier =
         Modifier
           .fillMaxSize()
-          .padding(padding)
-          .padding(horizontal = 16.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
+          .background(manusBackgroundBrush)
+          .padding(padding),
     ) {
-      AnimatedVisibility(
-        visible = state.errorText != null,
-        enter = fadeIn(),
-        exit = fadeOut(),
-      ) {
-        ErrorCard(text = state.errorText ?: "")
-      }
-      if (!isAuthenticated) {
-        InfoCard(text = stringResource(R.string.info_login_required_to_chat))
-        Button(
-          onClick = onRequireLogin,
-          modifier = Modifier.fillMaxWidth(),
-        ) {
-          Text(stringResource(R.string.action_login))
-        }
-      } else if (state.hosts.isEmpty()) {
-        InfoCard(text = stringResource(R.string.info_no_hosts))
-      } else {
-          HostListRow(hosts = state.hosts, sessionUsage = state.sessionUsage)
-      }
-      ModeSelectorRow(
-        title = stringResource(R.string.title_model_mode),
-        options = modeOptions,
-        selectedModeId = selectedModeId,
-        onSelectMode = onSelectMode,
-      )
-      ModeHintCard(mode = TestChatModeCatalog.resolveMode(selectedModeId))
-      if (state.threads.isNotEmpty()) {
-        TextField(
-          value = searchQuery,
-          onValueChange = { searchQuery = it },
-          label = { Text(stringResource(R.string.label_search_sessions)) },
-          singleLine = true,
-          colors = textFieldColors(),
-          modifier = Modifier.fillMaxWidth(),
-        )
-      }
-      val filteredThreads =
-        if (searchQuery.isBlank()) {
-          state.threads
-        } else {
-          val query = searchQuery.trim().lowercase()
-          state.threads.filter { thread ->
-            val identity = parseChatIdentity(thread.chatId)
-            val title = resolveSessionLabel(thread).lowercase()
-            val machine = identity.machine.lowercase()
-            val session = identity.session.lowercase()
-            title.contains(query) || machine.contains(query) || session.contains(query)
-          }
-        }
-      val deletedThreads = filteredThreads.filter { it.isDeleted }
-      val activeThreads =
-        filteredThreads.filterNot { it.isArchived || it.isDeleted }
-      val archivedThreads =
-        filteredThreads.filter { it.isArchived && !it.isDeleted }
-      val sortedActiveThreads =
-        activeThreads.sortedWith(
-          compareByDescending<TestChatThread> { it.isPinned }
-            .thenByDescending { it.lastTimestampMs },
-        )
-      val sortedArchivedThreads =
-        archivedThreads.sortedWith(
-          compareByDescending<TestChatThread> { it.isPinned }
-            .thenByDescending { it.lastTimestampMs },
-        )
-      val sortedDeletedThreads =
-        deletedThreads.sortedByDescending { it.deletedAt ?: it.lastTimestampMs }
-      LazyColumn(
+      Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize(),
       ) {
-        items(sortedActiveThreads) { thread ->
-          ChatThreadRow(
-            thread = thread,
-            onClick = { onOpenChat(thread.chatId) },
-            onRename = { renameTarget = thread },
-            onTogglePinned = { onTogglePinThread(thread.chatId) },
-            onToggleArchived = { onToggleArchiveThread(thread.chatId) },
-            onDelete = { deleteTarget = thread },
+        AnimatedVisibility(
+          visible = state.errorText != null,
+          enter = fadeIn(),
+          exit = fadeOut(),
+        ) {
+          ErrorCard(text = state.errorText ?: "")
+        }
+        if (!isAuthenticated) {
+          InfoCard(text = stringResource(R.string.info_login_required_to_chat))
+          Button(
+            onClick = onRequireLogin,
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Text(stringResource(R.string.action_login))
+          }
+        } else if (state.hosts.isEmpty()) {
+          InfoCard(text = stringResource(R.string.info_no_hosts))
+        } else {
+          HostListRow(hosts = state.hosts, sessionUsage = state.sessionUsage)
+        }
+        ModeSelectorRow(
+          title = stringResource(R.string.title_model_mode),
+          options = modeOptions,
+          selectedModeId = selectedModeId,
+          onSelectMode = onSelectMode,
+        )
+        ModeHintCard(mode = TestChatModeCatalog.resolveMode(selectedModeId))
+        if (state.threads.isNotEmpty()) {
+          TextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            label = { Text(stringResource(R.string.label_search_sessions)) },
+            singleLine = true,
+            colors = textFieldColors(),
+            modifier = Modifier.fillMaxWidth(),
           )
         }
-        if (sortedArchivedThreads.isNotEmpty()) {
-          item {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.Center,
-            ) {
-              TextButton(onClick = { showArchived = !showArchived }) {
-                Text(
-                  text =
-                    if (showArchived) {
-                      stringResource(
-                        R.string.action_hide_archived,
-                        sortedArchivedThreads.size,
-                      )
-                    } else {
-                      stringResource(
-                        R.string.action_show_archived,
-                        sortedArchivedThreads.size,
-                      )
-                    },
+        val filteredThreads =
+          if (searchQuery.isBlank()) {
+            state.threads
+          } else {
+            val query = searchQuery.trim().lowercase()
+            state.threads.filter { thread ->
+              val identity = parseChatIdentity(thread.chatId)
+              val title = resolveSessionLabel(thread).lowercase()
+              val machine = identity.machine.lowercase()
+              val session = identity.session.lowercase()
+              title.contains(query) || machine.contains(query) || session.contains(query)
+            }
+          }
+        val deletedThreads = filteredThreads.filter { it.isDeleted }
+        val activeThreads =
+          filteredThreads.filterNot { it.isArchived || it.isDeleted }
+        val archivedThreads =
+          filteredThreads.filter { it.isArchived && !it.isDeleted }
+        val sortedActiveThreads =
+          activeThreads.sortedWith(
+            compareByDescending<TestChatThread> { it.isPinned }
+              .thenByDescending { it.lastTimestampMs },
+          )
+        val sortedArchivedThreads =
+          archivedThreads.sortedWith(
+            compareByDescending<TestChatThread> { it.isPinned }
+              .thenByDescending { it.lastTimestampMs },
+          )
+        val sortedDeletedThreads =
+          deletedThreads.sortedByDescending { it.deletedAt ?: it.lastTimestampMs }
+        LazyColumn(
+          verticalArrangement = Arrangement.spacedBy(12.dp),
+          modifier = Modifier.fillMaxSize(),
+        ) {
+          items(sortedActiveThreads) { thread ->
+            ChatThreadRow(
+              thread = thread,
+              onClick = { onOpenChat(thread.chatId) },
+              onRename = { renameTarget = thread },
+              onTogglePinned = { onTogglePinThread(thread.chatId) },
+              onToggleArchived = { onToggleArchiveThread(thread.chatId) },
+              onDelete = { deleteTarget = thread },
+            )
+          }
+          if (sortedArchivedThreads.isNotEmpty()) {
+            item {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+              ) {
+                TextButton(onClick = { showArchived = !showArchived }) {
+                  Text(
+                    text =
+                      if (showArchived) {
+                        stringResource(
+                          R.string.action_hide_archived,
+                          sortedArchivedThreads.size,
+                        )
+                      } else {
+                        stringResource(
+                          R.string.action_show_archived,
+                          sortedArchivedThreads.size,
+                        )
+                      },
+                  )
+                }
+              }
+            }
+            if (showArchived) {
+              items(sortedArchivedThreads) { thread ->
+                ChatThreadRow(
+                  thread = thread,
+                  onClick = { onOpenChat(thread.chatId) },
+                  onRename = { renameTarget = thread },
+                  onTogglePinned = { onTogglePinThread(thread.chatId) },
+                  onToggleArchived = { onToggleArchiveThread(thread.chatId) },
+                  onDelete = { deleteTarget = thread },
                 )
               }
             }
           }
-          if (showArchived) {
-            items(sortedArchivedThreads) { thread ->
-              ChatThreadRow(
-                thread = thread,
-                onClick = { onOpenChat(thread.chatId) },
-                onRename = { renameTarget = thread },
-                onTogglePinned = { onTogglePinThread(thread.chatId) },
-                onToggleArchived = { onToggleArchiveThread(thread.chatId) },
-                onDelete = { deleteTarget = thread },
-              )
-            }
-          }
-        }
-        if (sortedDeletedThreads.isNotEmpty()) {
-          item {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.Center,
-            ) {
-              TextButton(onClick = { showDeleted = !showDeleted }) {
-                Text(
-                  text =
-                    if (showDeleted) {
-                      stringResource(
-                        R.string.action_hide_deleted,
-                        sortedDeletedThreads.size,
-                      )
-                    } else {
-                      stringResource(
-                        R.string.action_show_deleted,
-                        sortedDeletedThreads.size,
-                      )
-                    },
-                )
+          if (sortedDeletedThreads.isNotEmpty()) {
+            item {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+              ) {
+                TextButton(onClick = { showDeleted = !showDeleted }) {
+                  Text(
+                    text =
+                      if (showDeleted) {
+                        stringResource(
+                          R.string.action_hide_deleted,
+                          sortedDeletedThreads.size,
+                        )
+                      } else {
+                        stringResource(
+                          R.string.action_show_deleted,
+                          sortedDeletedThreads.size,
+                        )
+                      },
+                  )
+                }
               }
             }
-          }
-          if (showDeleted) {
-            items(sortedDeletedThreads) { thread ->
-              DeletedThreadRow(
-                thread = thread,
-                onRestore = { onRestoreThread(thread.chatId) },
-                onDeleteForever = { purgeTarget = thread },
-              )
+            if (showDeleted) {
+              items(sortedDeletedThreads) { thread ->
+                DeletedThreadRow(
+                  thread = thread,
+                  onRestore = { onRestoreThread(thread.chatId) },
+                  onDeleteForever = { purgeTarget = thread },
+                )
+              }
             }
           }
         }
@@ -1021,52 +1060,59 @@ private fun ChatScreen(
         },
         colors =
           TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = Color.Transparent,
           ),
       )
     },
-    containerColor = MaterialTheme.colorScheme.background,
+    containerColor = Color.Transparent,
   ) { padding ->
-    Column(
+    Box(
       modifier =
         Modifier
           .fillMaxSize()
-          .padding(padding)
-          .imePadding()
-          .navigationBarsPadding(),
+          .background(manusBackgroundBrush)
+          .padding(padding),
     ) {
-      AnimatedVisibility(
-        visible = state.errorText != null,
-        enter = fadeIn(),
-        exit = fadeOut(),
+      Column(
+        modifier =
+          Modifier
+            .fillMaxSize()
+            .imePadding()
+            .navigationBarsPadding(),
       ) {
-        ErrorCard(text = state.errorText ?: "")
-      }
-      ModeSelectorRow(
-        title = stringResource(R.string.title_model_mode),
-        options = modeOptions,
-        selectedModeId = selectedModeId,
-        onSelectMode = onSelectMode,
-      )
-      ModeHintCard(mode = TestChatModeCatalog.resolveMode(selectedModeId))
-      LazyColumn(
-        state = listState,
-        modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-      ) {
-        items(state.messages) { messageItem ->
-          MessageBubble(messageItem, markdown, messageTextSize)
+        AnimatedVisibility(
+          visible = state.errorText != null,
+          enter = fadeIn(),
+          exit = fadeOut(),
+        ) {
+          ErrorCard(text = state.errorText ?: "")
         }
-      }
+        ModeSelectorRow(
+          title = stringResource(R.string.title_model_mode),
+          options = modeOptions,
+          selectedModeId = selectedModeId,
+          onSelectMode = onSelectMode,
+        )
+        ModeHintCard(mode = TestChatModeCatalog.resolveMode(selectedModeId))
+        LazyColumn(
+          state = listState,
+          modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+          verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+          items(state.messages) { messageItem ->
+            MessageBubble(messageItem, markdown, messageTextSize)
+          }
+        }
 
-      Composer(
-        value = message,
-        onValueChange = { message = it },
-        onSend = {
-          onSend(message)
-          message = ""
-        },
-      )
+        Composer(
+          value = message,
+          onValueChange = { message = it },
+          onSend = {
+            onSend(message)
+            message = ""
+          },
+        )
+      }
     }
   }
 }
@@ -1098,72 +1144,76 @@ private fun AccountDashboardScreen(
         title = { Text(stringResource(R.string.title_account)) },
         colors =
           TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = Color.Transparent,
           ),
       )
     },
-    containerColor = MaterialTheme.colorScheme.background,
+    containerColor = Color.Transparent,
   ) { padding ->
-    LazyColumn(
+    Box(
       modifier =
         Modifier
           .fillMaxSize()
-          .padding(padding)
-          .padding(horizontal = 16.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
+          .background(manusBackgroundBrush)
+          .padding(padding),
     ) {
-      item {
-        if (!state.errorText.isNullOrBlank()) {
-          ErrorCard(text = state.errorText)
+      LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
+        item {
+          if (!state.errorText.isNullOrBlank()) {
+            ErrorCard(text = state.errorText)
+          }
         }
-      }
-      item {
-        SectionHeader(text = stringResource(R.string.title_account_section))
-        AccountSummaryCard(
-          userId = userLabel,
-          serverLabel = serverLabel,
-        )
-      }
-      item {
-        SectionHeader(text = stringResource(R.string.title_host_tokens))
-        if (hosts.isEmpty()) {
-          InfoCard(text = stringResource(R.string.info_no_hosts_connected))
-        } else {
-          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            hosts.forEach { host ->
-              HostTokenCard(
-                host = host,
-                onCopy = {
-                  clipboard.setText(AnnotatedString(host.token))
-                },
-              )
+        item {
+          SectionHeader(text = stringResource(R.string.title_account_section))
+          AccountSummaryCard(
+            userId = userLabel,
+            serverLabel = serverLabel,
+          )
+        }
+        item {
+          SectionHeader(text = stringResource(R.string.title_host_tokens))
+          if (hosts.isEmpty()) {
+            InfoCard(text = stringResource(R.string.info_no_hosts_connected))
+          } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+              hosts.forEach { host ->
+                HostTokenCard(
+                  host = host,
+                  onCopy = {
+                    clipboard.setText(AnnotatedString(host.token))
+                  },
+                )
+              }
             }
           }
         }
-      }
-      item {
-        SectionHeader(text = stringResource(R.string.title_language))
-        LanguagePicker(
-          selectedTag = languageTag,
-          onSelected = onLanguageChange,
-        )
-      }
-      item {
-        SectionHeader(text = stringResource(R.string.title_settings))
-        Button(
-          onClick = { showSettingsSheet = true },
-          modifier = Modifier.fillMaxWidth(),
-        ) {
-          Text(stringResource(R.string.action_open_settings))
+        item {
+          SectionHeader(text = stringResource(R.string.title_language))
+          LanguagePicker(
+            selectedTag = languageTag,
+            onSelected = onLanguageChange,
+          )
         }
-      }
-      item {
-        Spacer(modifier = Modifier.height(4.dp))
-        Button(
-          onClick = { showLogoutConfirm = true },
-          modifier = Modifier.fillMaxWidth(),
-        ) {
-          Text(stringResource(R.string.action_logout))
+        item {
+          SectionHeader(text = stringResource(R.string.title_settings))
+          Button(
+            onClick = { showSettingsSheet = true },
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Text(stringResource(R.string.action_open_settings))
+          }
+        }
+        item {
+          Spacer(modifier = Modifier.height(4.dp))
+          Button(
+            onClick = { showLogoutConfirm = true },
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            Text(stringResource(R.string.action_logout))
+          }
         }
       }
     }
@@ -1226,7 +1276,11 @@ private fun AppBottomNav(
   currentTab: MainTab,
   onTabSelected: (MainTab) -> Unit,
 ) {
-  NavigationBar {
+  NavigationBar(
+    containerColor = MaterialTheme.colorScheme.surface,
+    tonalElevation = 0.dp,
+    modifier = Modifier.border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))),
+  ) {
     NavigationBarItem(
       selected = currentTab == MainTab.Chat,
       onClick = { onTabSelected(MainTab.Chat) },
@@ -1256,8 +1310,9 @@ private fun AppBottomNav(
 private fun SectionHeader(text: String) {
   Text(
     text = text,
-    style = MaterialTheme.typography.titleMedium,
-    fontWeight = FontWeight.SemiBold,
+    style = MaterialTheme.typography.labelLarge,
+    fontWeight = FontWeight.Medium,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
   )
 }
 
@@ -1297,7 +1352,10 @@ private fun UpdateSettingsSection(
     val notes = updateState.releaseNotes?.trim()?.take(1200).orEmpty()
     val htmlUrl = updateState.htmlUrl.orEmpty()
     Card(
+      shape = RoundedCornerShape(20.dp),
+      border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
       colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
       modifier = Modifier.fillMaxWidth(),
     ) {
       Column(
@@ -1338,7 +1396,10 @@ private fun LinksSection(
   val xhsUrl = "https://xhslink.com/m/487YEE3Jygk"
   val siteUrl = "https://github.com/vimalinx/ClawNet"
   Card(
+    shape = RoundedCornerShape(20.dp),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     modifier = Modifier.fillMaxWidth(),
   ) {
     Column(
@@ -1374,8 +1435,10 @@ private fun AccountSummaryCard(
   serverLabel: String,
 ) {
   Card(
-    shape = RoundedCornerShape(18.dp),
+    shape = RoundedCornerShape(20.dp),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
   ) {
     Column(
       modifier = Modifier.padding(16.dp),
@@ -1400,8 +1463,10 @@ private fun HostTokenCard(
 ) {
   val color = resolveMachineColor(host.label)
   Card(
-    shape = RoundedCornerShape(18.dp),
+    shape = RoundedCornerShape(20.dp),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
   ) {
     Column(
       modifier = Modifier.padding(16.dp),
@@ -1425,8 +1490,10 @@ private fun UsageTotalsCard(
   sessionCount: Int,
 ) {
   Card(
-    shape = RoundedCornerShape(18.dp),
+    shape = RoundedCornerShape(20.dp),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
   ) {
     Column(
       modifier = Modifier.padding(16.dp),
@@ -1454,8 +1521,10 @@ private fun SessionUsageCard(usage: TestChatSessionUsage) {
       stringResource(R.string.label_none)
     }
   Card(
-    shape = RoundedCornerShape(18.dp),
+    shape = RoundedCornerShape(20.dp),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
   ) {
     Column(
       modifier = Modifier.padding(16.dp),
@@ -1492,7 +1561,7 @@ private fun ConnectionStatusRow(state: TestChatUiState) {
   val (label, color) =
     when (state.connectionState) {
       TestChatConnectionState.Connected ->
-        stringResource(R.string.status_connected) to Color(0xFF16A34A)
+        stringResource(R.string.status_connected) to ManusColors.Success
       TestChatConnectionState.Connecting ->
         stringResource(R.string.status_connecting) to Color(0xFFF59E0B)
       TestChatConnectionState.Error ->
@@ -1555,11 +1624,14 @@ private fun ConnectionStatusRow(state: TestChatUiState) {
 @Composable
 private fun ErrorCard(text: String) {
   Card(
+    shape = RoundedCornerShape(18.dp),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
     colors =
       CardDefaults.cardColors(
         containerColor = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
       ),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     modifier = Modifier.fillMaxWidth(),
   ) {
     Text(
@@ -1573,11 +1645,14 @@ private fun ErrorCard(text: String) {
 @Composable
 private fun InfoCard(text: String) {
   Card(
+    shape = RoundedCornerShape(18.dp),
+    border = manusBorder(),
     colors =
       CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
       ),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     modifier = Modifier.fillMaxWidth(),
   ) {
     Text(
@@ -1668,8 +1743,10 @@ private fun HostListRow(hosts: List<TestChatHost>, sessionUsage: List<TestChatSe
 private fun HostUsageCard(host: TestChatHost, tokenCount: Int) {
   val color = resolveMachineColor(host.label)
   Card(
-    shape = RoundedCornerShape(14.dp),
+    shape = RoundedCornerShape(16.dp),
+    border = manusBorder(),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
   ) {
     Column(
       modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -1814,11 +1891,13 @@ private fun DeletedThreadRow(
   val machineColor = resolveMachineColor(machineLabel)
   val deletedAt = thread.deletedAt ?: thread.lastTimestampMs
   Card(
-    shape = RoundedCornerShape(18.dp),
+    shape = RoundedCornerShape(20.dp),
+    border = manusBorder(),
     colors =
       CardDefaults.cardColors(
         containerColor = MaterialTheme.colorScheme.surface,
       ),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
   ) {
     Column(
       modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -1886,11 +1965,13 @@ private fun ChatThreadRow(
   val machineColor = resolveMachineColor(machineLabel)
   var menuExpanded by remember { mutableStateOf(false) }
   Card(
-    shape = RoundedCornerShape(18.dp),
+    shape = RoundedCornerShape(20.dp),
+    border = manusBorder(),
     colors =
       CardDefaults.cardColors(
         containerColor = MaterialTheme.colorScheme.surface,
       ),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     modifier = Modifier.clickable { onClick() },
   ) {
     Row(
@@ -2105,7 +2186,7 @@ private fun UnreadBadge(count: Int) {
   ) {
     Text(
       text = count.toString(),
-      style = MaterialTheme.typography.labelSmall.copy(color = Color.White),
+      style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onPrimary),
     )
   }
 }
@@ -2119,9 +2200,10 @@ private fun MessageBubble(
   val isOutgoing = message.direction == "out"
   val alignment = if (isOutgoing) Alignment.End else Alignment.Start
   val bubbleColor =
-    if (isOutgoing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+    if (isOutgoing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
   val textColor =
     if (isOutgoing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+  val bubbleShape = RoundedCornerShape(16.dp)
   val statusLabel =
     if (isOutgoing) {
       formatDeliveryStatus(message.deliveryStatus)
@@ -2139,10 +2221,20 @@ private fun MessageBubble(
     Box(
       modifier =
         Modifier
-          .clip(RoundedCornerShape(18.dp))
-        .background(bubbleColor)
-        .padding(horizontal = 14.dp, vertical = 10.dp)
-        .widthIn(max = 280.dp),
+          .clip(bubbleShape)
+          .background(bubbleColor)
+          .then(
+            if (isOutgoing) {
+              Modifier
+            } else {
+              Modifier.border(
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                bubbleShape,
+              )
+            },
+          )
+          .padding(horizontal = 14.dp, vertical = 10.dp)
+          .widthIn(max = 280.dp),
     ) {
       Column {
         MarkdownText(
@@ -2227,7 +2319,11 @@ private fun Composer(
         .padding(16.dp)
         .background(
           MaterialTheme.colorScheme.surface,
-          RoundedCornerShape(22.dp),
+          RoundedCornerShape(24.dp),
+        )
+        .border(
+          manusBorder(alpha = 0.45f),
+          RoundedCornerShape(24.dp),
         )
         .padding(horizontal = 12.dp, vertical = 8.dp),
     verticalAlignment = Alignment.CenterVertically,
@@ -2255,10 +2351,27 @@ private fun Composer(
     IconButton(
       onClick = onSend,
       enabled = value.isNotBlank(),
+      modifier =
+        Modifier
+          .size(38.dp)
+          .clip(CircleShape)
+          .background(
+            if (value.isNotBlank()) {
+              MaterialTheme.colorScheme.primary
+            } else {
+              MaterialTheme.colorScheme.surfaceContainerHighest
+            },
+          ),
     ) {
       Icon(
         imageVector = Icons.Default.Send,
         contentDescription = stringResource(R.string.action_send),
+        tint =
+          if (value.isNotBlank()) {
+            MaterialTheme.colorScheme.onPrimary
+          } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+          },
       )
     }
   }
@@ -2267,10 +2380,15 @@ private fun Composer(
 @Composable
 private fun textFieldColors() =
   TextFieldDefaults.colors(
-    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+    focusedContainerColor = MaterialTheme.colorScheme.surface,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+    focusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
     focusedIndicatorColor = Color.Transparent,
     unfocusedIndicatorColor = Color.Transparent,
+    cursorColor = MaterialTheme.colorScheme.primary,
   )
 
 private val timeFormatter: DateTimeFormatter =
@@ -2280,15 +2398,23 @@ private fun formatTime(timestampMs: Long): String {
   return timeFormatter.format(Instant.ofEpochMilli(timestampMs))
 }
 
+private val manusBackgroundBrush =
+  Brush.verticalGradient(
+    listOf(
+      Color(0xFFF5F6F8),
+      Color(0xFFF1F3F6),
+    ),
+  )
+
 private val machinePalette =
   listOf(
-    Color(0xFF2563EB),
-    Color(0xFF16A34A),
-    Color(0xFFEA580C),
-    Color(0xFFDC2626),
-    Color(0xFF7C3AED),
-    Color(0xFF0F766E),
-    Color(0xFF9333EA),
+    Color(0xFF344054),
+    Color(0xFF175CD3),
+    Color(0xFF0E9384),
+    Color(0xFF667085),
+    Color(0xFF4F46E5),
+    Color(0xFF1570EF),
+    Color(0xFF3B3B3B),
   )
 
 private const val UUID_PREFIX = "local"

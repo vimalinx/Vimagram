@@ -745,14 +745,36 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     }
   }
 
-  fun createThread(title: String, hostLabel: String, sessionName: String) {
+  fun createThread(
+    title: String,
+    hostLabel: String,
+    sessionName: String,
+    instanceModelTierId: String? = null,
+    instanceIdentityId: String? = null,
+  ) {
     val normalizedHost = normalizeHostLabel(hostLabel)
     val session = sessionName.trim().ifBlank { "main" }
     val chatId = "machine:${normalizedHost}/${session}"
     updateSnapshot { snapshot ->
       val existing = snapshot.threads.firstOrNull { it.chatId == chatId }
       if (existing != null) {
-        if (!existing.isDeleted) return@updateSnapshot snapshot
+        if (!existing.isDeleted) {
+          if (instanceModelTierId != null && instanceIdentityId != null) {
+            val updatedThreads =
+              snapshot.threads.map { thread ->
+                if (thread.chatId == chatId) {
+                  thread.copy(
+                    instanceModelTierId = instanceModelTierId,
+                    instanceIdentityId = instanceIdentityId,
+                  )
+                } else {
+                  thread
+                }
+              }
+            return@updateSnapshot snapshot.copy(threads = updatedThreads)
+          }
+          return@updateSnapshot snapshot
+        }
         val now = System.currentTimeMillis()
         val restored =
           existing.copy(
@@ -760,6 +782,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
             deletedAt = null,
             lastTimestampMs = now,
             lastMessage = existing.lastMessage.ifBlank { appString(R.string.msg_start_chatting) },
+            instanceModelTierId = instanceModelTierId ?: existing.instanceModelTierId,
+            instanceIdentityId = instanceIdentityId ?: existing.instanceIdentityId,
           )
         val updatedThreads =
           snapshot.threads.map { thread ->
@@ -775,6 +799,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
             title = title.ifBlank { session },
             lastMessage = appString(R.string.msg_start_chatting),
             lastTimestampMs = now,
+            instanceModelTierId = instanceModelTierId,
+            instanceIdentityId = instanceIdentityId,
           )
       snapshot.copy(threads = updated)
     }
@@ -789,11 +815,89 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
     sendMessage("/new")
   }
 
+  data class PendingInstanceConfig(
+    val chatId: String,
+    val modelTierId: String,
+    val identityId: String,
+    val mode: TestChatModeOption,
+  )
+
+  private val pendingInstanceConfigs = mutableMapOf<String, PendingInstanceConfig>()
+
+  private fun encodeInstanceModeId(modelTierId: String, identityId: String): String {
+    val tier = modelTierId.trim().lowercase().replace(Regex("[^a-z0-9]"), "_")
+    val identity = identityId.trim().lowercase().replace(Regex("[^a-z0-9]"), "_")
+    return "inst_${tier}_${identity}"
+  }
+
+  fun createInstanceAndOpen(
+    title: String,
+    hostLabel: String,
+    sessionName: String,
+    modelTierId: String,
+    identityId: String,
+  ) {
+    val normalizedHost = normalizeHostLabel(hostLabel)
+    val session = sessionName.trim().ifBlank { "main" }
+    val chatId = "machine:${normalizedHost}/${session}"
+    createThread(
+      title,
+      hostLabel,
+      sessionName,
+      instanceModelTierId = modelTierId,
+      instanceIdentityId = identityId,
+    )
+    openChat(chatId)
+
+    val modeId = encodeInstanceModeId(modelTierId, identityId)
+    val modelHint =
+      when (modelTierId) {
+        "m2.5" -> "minimax/m2.5"
+        "glm-4.7" -> "zai/glm-4.7"
+        "glm-5" -> "zai/glm-5"
+        else -> ""
+      }
+    val labelTier =
+      when (modelTierId) {
+        "m2.5" -> "Standard"
+        "glm-4.7" -> "Pro"
+        "glm-5" -> "Max"
+        else -> modelTierId
+      }
+    val labelIdentity =
+      when (identityId) {
+        "ecom" -> "E-commerce"
+        "docs" -> "Writing"
+        "media" -> "Creator"
+        else -> identityId
+      }
+    val mode =
+      TestChatModeOption(
+        id = modeId,
+        title = "$labelTier · $labelIdentity",
+        modelHint = modelHint,
+        agentHint = identityId,
+        skillsHint = identityId,
+        demoOnly = false,
+      )
+    pendingInstanceConfigs[chatId] =
+      PendingInstanceConfig(
+        chatId = chatId,
+        modelTierId = modelTierId,
+        identityId = identityId,
+        mode = mode,
+      )
+
+    sendMessage("/new")
+  }
+
   fun sendMessage(text: String) {
     val account = _account.value ?: return
     val chatId = _activeChatId.value ?: return
     if (text.isBlank()) return
-    val selectedMode = TestChatModeCatalog.resolveMode(_selectedModeId.value)
+    val isCreate = text.trim().startsWith("/new")
+    val pending = if (isCreate) pendingInstanceConfigs[chatId] else null
+    val selectedMode = if (pending != null) pending.mode else null
     val host = resolveHostForChat(chatId) ?: run {
       _errorText.value = appString(R.string.error_host_not_found)
       return
@@ -834,6 +938,8 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
             message.senderName,
             messageId,
             selectedMode,
+            instanceModelTierId = pending?.modelTierId,
+            instanceIdentityId = pending?.identityId,
           )
         }
           .getOrElse {
@@ -849,6 +955,9 @@ class TestChatViewModel(app: Application) : AndroidViewModel(app) {
         }
       }
       updateMessageStatus(messageId, DELIVERY_SENT)
+      if (pending != null) {
+        pendingInstanceConfigs.remove(chatId)
+      }
     }
   }
 

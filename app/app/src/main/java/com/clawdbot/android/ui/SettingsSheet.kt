@@ -11,7 +11,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.only
@@ -33,13 +36,21 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,10 +59,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
@@ -65,10 +82,173 @@ import com.clawdbot.android.NodeForegroundService
 import com.clawdbot.android.UpdateStatus
 import com.clawdbot.android.VoiceWakeMode
 import com.clawdbot.android.WakeWords
+import com.clawdbot.android.ui.manusBorder
+import kotlinx.coroutines.launch
+
+@Composable
+private fun ManusSectionHeader(text: String) {
+  Text(text = text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+}
+
+@Composable
+private fun ManusDivider() {
+  HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+}
+
+@Composable
+private fun ManusCard(content: @Composable () -> Unit) {
+  Card(
+    shape = MaterialTheme.shapes.extraLarge,
+    border = manusBorder(alpha = 0.35f),
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+  ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      content()
+    }
+  }
+}
+
+@Composable
+private fun ManusSwitchRow(
+  title: String,
+  description: String,
+  checked: Boolean,
+  enabled: Boolean = true,
+  onCheckedChange: (Boolean) -> Unit,
+) {
+  Row(
+    modifier = Modifier.fillMaxWidth(),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(10.dp),
+  ) {
+    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      Text(title, style = MaterialTheme.typography.labelLarge)
+      Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+  }
+}
+
+@Composable
+private fun ManusRadioRow(
+  title: String,
+  description: String,
+  selected: Boolean,
+  enabled: Boolean = true,
+  onClick: () -> Unit,
+) {
+  Row(
+    modifier = Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.55f).clickable(enabled = enabled) { onClick() },
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(10.dp),
+  ) {
+    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      Text(title, style = MaterialTheme.typography.labelLarge)
+      Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    RadioButton(selected = selected, onClick = onClick, enabled = enabled)
+  }
+}
+
+@Composable
+private fun ManusKeyValueRow(
+  title: String,
+  value: String,
+  copyValue: String? = null,
+  onCopied: (() -> Unit)? = null,
+) {
+  val haptics = LocalHapticFeedback.current
+  Row(
+    modifier = Modifier.fillMaxWidth(),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(10.dp),
+  ) {
+    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      Text(title, style = MaterialTheme.typography.labelLarge)
+      Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+
+    if (!copyValue.isNullOrBlank() && onCopied != null) {
+      val clipboard = LocalClipboardManager.current
+      FilledIconButton(
+        onClick = {
+          haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+          clipboard.setText(AnnotatedString(copyValue))
+          onCopied()
+        },
+        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.height(36.dp),
+      ) {
+        Icon(
+          imageVector = Icons.Filled.ContentCopy,
+          contentDescription = "Copy $title",
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun ManusButton(
+  label: String,
+  enabled: Boolean = true,
+  onClick: () -> Unit,
+) {
+  Button(
+    onClick = onClick,
+    enabled = enabled,
+    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+    modifier = Modifier.fillMaxWidth(),
+  ) {
+    Text(label)
+  }
+}
+
+@Composable
+private fun ManusOutlinedField(
+  value: String,
+  onValueChange: (String) -> Unit,
+  label: String,
+  modifier: Modifier = Modifier,
+  enabled: Boolean = true,
+  singleLine: Boolean = false,
+  keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+  keyboardActions: KeyboardActions = KeyboardActions.Default,
+) {
+  OutlinedTextField(
+    value = value,
+    onValueChange = onValueChange,
+    label = { Text(label) },
+    modifier = modifier.fillMaxWidth(),
+    enabled = enabled,
+    singleLine = singleLine,
+    keyboardOptions = keyboardOptions,
+    keyboardActions = keyboardActions,
+    shape = MaterialTheme.shapes.large,
+    colors =
+      androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = MaterialTheme.colorScheme.surface,
+        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+        disabledContainerColor = MaterialTheme.colorScheme.surface,
+        focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
+        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+        cursorColor = MaterialTheme.colorScheme.primary,
+      ),
+  )
+}
 
 @Composable
 fun SettingsSheet(viewModel: MainViewModel) {
   val context = LocalContext.current
+  val haptics = LocalHapticFeedback.current
+  val scope = rememberCoroutineScope()
+  val snackbarHostState = remember { SnackbarHostState() }
+  val showSnackbar: (String) -> Unit = { msg ->
+    scope.launch { snackbarHostState.showSnackbar(message = msg, withDismissAction = true, duration = SnackbarDuration.Short) }
+  }
   val instanceId by viewModel.instanceId.collectAsState()
   val displayName by viewModel.displayName.collectAsState()
   val cameraEnabled by viewModel.cameraEnabled.collectAsState()
@@ -257,106 +437,113 @@ fun SettingsSheet(viewModel: MainViewModel) {
       "Discovery active • ${visibleGateways.size} gateway${if (visibleGateways.size == 1) "" else "s"} found"
     }
 
-  LazyColumn(
-    state = listState,
-    modifier =
-      Modifier
-        .fillMaxWidth()
-        .fillMaxHeight()
-        .imePadding()
-        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
-    contentPadding = PaddingValues(16.dp),
-    verticalArrangement = Arrangement.spacedBy(6.dp),
-  ) {
-    // Order parity: Node → Gateway → Voice → Camera → Messaging → Location → Screen.
-    item { Text("Node", style = MaterialTheme.typography.titleSmall) }
+  Box(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+      state = listState,
+      modifier =
+        Modifier
+          .fillMaxWidth()
+          .fillMaxHeight()
+          .imePadding()
+          .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
+      contentPadding = PaddingValues(16.dp),
+      verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+      // Order parity: Node → Gateway → Voice → Camera → Messaging → Location → Screen.
+      item { ManusSectionHeader("Node") }
+      item {
+        ManusCard {
+          ManusOutlinedField(
+            value = displayName,
+            onValueChange = viewModel::setDisplayName,
+            label = "Name",
+          )
+          ManusKeyValueRow(
+            title = "Instance ID",
+            value = instanceId,
+            copyValue = instanceId,
+            onCopied = { showSnackbar("Instance ID copied") },
+          )
+          ManusKeyValueRow(title = "Device", value = deviceModel)
+          ManusKeyValueRow(title = "Version", value = appVersion)
+        }
+      }
     item {
-      OutlinedTextField(
-        value = displayName,
-        onValueChange = viewModel::setDisplayName,
-        label = { Text("Name") },
-        modifier = Modifier.fillMaxWidth(),
-      )
-    }
-    item { Text("Instance ID: $instanceId", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-    item { Text("Device: $deviceModel", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-    item { Text("Version: $appVersion", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-    item {
-      ListItem(
-        headlineContent = { Text("Update") },
-        supportingContent = {
-          val statusText =
-            when (updateState.status) {
-              UpdateStatus.Idle -> "Check for the latest GitHub release."
-              UpdateStatus.Checking -> "Checking…"
-              UpdateStatus.Ready -> if (updateState.isUpdateAvailable) "New version available" else "Up to date"
-              UpdateStatus.Error -> updateState.error ?: "Update check failed"
-            }
-          Text(statusText)
-        },
-        trailingContent = {
-          val checking = updateState.status == UpdateStatus.Checking
-          Button(onClick = viewModel::checkForUpdates, enabled = !checking) {
-            Text(if (checking) "Checking" else "Check")
+      ManusCard {
+        val statusText =
+          when (updateState.status) {
+            UpdateStatus.Idle -> "Check for the latest GitHub release."
+            UpdateStatus.Checking -> "Checking…"
+            UpdateStatus.Ready -> if (updateState.isUpdateAvailable) "New version available" else "Up to date"
+            UpdateStatus.Error -> updateState.error ?: "Update check failed"
           }
-        },
-      )
+        Text("Update", style = MaterialTheme.typography.titleSmall)
+        Text(statusText, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val checking = updateState.status == UpdateStatus.Checking
+        ManusButton(label = if (checking) "Checking" else "Check", enabled = !checking, onClick = viewModel::checkForUpdates)
+      }
     }
     if (updateState.status == UpdateStatus.Ready && updateState.isUpdateAvailable) {
       val htmlUrl = updateState.htmlUrl
       val notes = updateState.releaseNotes?.take(1200).orEmpty()
       item {
-        ListItem(
-          headlineContent = {
-            Text(updateState.latestName ?: updateState.latestTag ?: "New release")
-          },
-          supportingContent = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-              Text("Tap to view the release on GitHub.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-              if (notes.isNotBlank()) {
-                Text(notes, color = MaterialTheme.colorScheme.onSurfaceVariant)
-              }
-            }
-          },
-          trailingContent = {
-            Button(onClick = {
+        ManusCard {
+          Text(updateState.latestName ?: updateState.latestTag ?: "New release", style = MaterialTheme.typography.titleSmall)
+          Text("Tap to view the release on GitHub.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+          if (notes.isNotBlank()) {
+            Text(notes, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+          ManusButton(
+            label = "View",
+            enabled = !htmlUrl.isNullOrBlank(),
+            onClick = {
               if (!htmlUrl.isNullOrBlank()) {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(htmlUrl)))
               }
-            }) {
-              Text("View")
-            }
-          },
-        )
-      }
-    }
-
-    item { HorizontalDivider() }
-
-    // Gateway
-    item { Text("Gateway", style = MaterialTheme.typography.titleSmall) }
-    item { ListItem(headlineContent = { Text("Status") }, supportingContent = { Text(statusText) }) }
-    if (serverName != null) {
-      item { ListItem(headlineContent = { Text("Server") }, supportingContent = { Text(serverName!!) }) }
-    }
-    if (remoteAddress != null) {
-      item { ListItem(headlineContent = { Text("Address") }, supportingContent = { Text(remoteAddress!!) }) }
-    }
-    item {
-      // UI sanity: "Disconnect" only when we have an active remote.
-      if (isConnected && remoteAddress != null) {
-        Button(
-          onClick = {
-            viewModel.disconnect()
-            NodeForegroundService.stop(context)
-          },
-        ) {
-          Text("Disconnect")
+            },
+          )
         }
       }
     }
 
-    item { HorizontalDivider() }
+      item { ManusDivider() }
+
+    // Gateway
+      item { ManusSectionHeader("Gateway") }
+      item {
+        ManusCard {
+          ManusKeyValueRow(title = "Status", value = statusText)
+          if (serverName != null) {
+            ManusKeyValueRow(title = "Server", value = serverName!!)
+          }
+          if (remoteAddress != null) {
+            ManusKeyValueRow(
+              title = "Address",
+              value = remoteAddress!!,
+              copyValue = remoteAddress!!,
+              onCopied = { showSnackbar("Address copied") },
+            )
+          }
+        }
+      }
+      item {
+        // UI sanity: "Disconnect" only when we have an active remote.
+        if (isConnected && remoteAddress != null) {
+          ManusCard {
+          ManusButton(
+            label = "Disconnect",
+            onClick = {
+              haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+              viewModel.disconnect()
+              NodeForegroundService.stop(context)
+              showSnackbar("Disconnected")
+            },
+          )
+          }
+        }
+      }
+
+      item { ManusDivider() }
 
     if (!isConnected || visibleGateways.isNotEmpty()) {
       item {
@@ -380,26 +567,21 @@ fun SettingsSheet(viewModel: MainViewModel) {
                 add("Ports: gw $gw · canvas $canvas")
               }
             }
-          ListItem(
-            headlineContent = { Text(gateway.name) },
-            supportingContent = {
-              Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                detailLines.forEach { line ->
-                  Text(line, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+          ManusCard {
+            Text(gateway.name, style = MaterialTheme.typography.titleSmall)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+              detailLines.forEach { line ->
+                Text(line, color = MaterialTheme.colorScheme.onSurfaceVariant)
               }
-            },
-            trailingContent = {
-              Button(
-                onClick = {
-                  NodeForegroundService.start(context)
-                  viewModel.connect(gateway)
-                },
-              ) {
-                Text("Connect")
-              }
-            },
-          )
+            }
+            ManusButton(
+              label = "Connect",
+              onClick = {
+                NodeForegroundService.start(context)
+                viewModel.connect(gateway)
+              },
+            )
+          }
         }
       }
       item {
@@ -413,160 +595,167 @@ fun SettingsSheet(viewModel: MainViewModel) {
       }
     }
 
-    item { HorizontalDivider() }
+    item { ManusDivider() }
 
     item {
-      ListItem(
-        headlineContent = { Text("Advanced") },
-        supportingContent = { Text("Manual gateway connection") },
-        trailingContent = {
+      ManusCard {
+        Row(
+          modifier = Modifier.fillMaxWidth().clickable { setAdvancedExpanded(!advancedExpanded) },
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+          Column(modifier = Modifier.weight(1f)) {
+            Text("Advanced", style = MaterialTheme.typography.titleSmall)
+            Text("Manual gateway connection", color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
           Icon(
             imageVector = if (advancedExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
             contentDescription = if (advancedExpanded) "Collapse" else "Expand",
           )
-        },
-        modifier =
-          Modifier.clickable {
-            setAdvancedExpanded(!advancedExpanded)
-          },
-      )
+        }
+      }
     }
     item {
       AnimatedVisibility(visible = advancedExpanded) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-          ListItem(
-            headlineContent = { Text("Use Manual Gateway") },
-            supportingContent = { Text("Use this when discovery is blocked.") },
-            trailingContent = { Switch(checked = manualEnabled, onCheckedChange = viewModel::setManualEnabled) },
+        ManusCard {
+          ManusSwitchRow(
+            title = "Use Manual Gateway",
+            description = "Use this when discovery is blocked.",
+            checked = manualEnabled,
+            onCheckedChange = viewModel::setManualEnabled,
           )
 
-          OutlinedTextField(
+          ManusOutlinedField(
             value = manualHost,
             onValueChange = viewModel::setManualHost,
-            label = { Text("Host") },
-            modifier = Modifier.fillMaxWidth(),
+            label = "Host",
             enabled = manualEnabled,
           )
-          OutlinedTextField(
+
+          ManusOutlinedField(
             value = manualPort.toString(),
             onValueChange = { v -> viewModel.setManualPort(v.toIntOrNull() ?: 0) },
-            label = { Text("Port") },
-            modifier = Modifier.fillMaxWidth(),
+            label = "Port",
             enabled = manualEnabled,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
           )
-          ListItem(
-            headlineContent = { Text("Require TLS") },
-            supportingContent = { Text("Pin the gateway certificate on first connect.") },
-            trailingContent = { Switch(checked = manualTls, onCheckedChange = viewModel::setManualTls, enabled = manualEnabled) },
-            modifier = Modifier.alpha(if (manualEnabled) 1f else 0.5f),
+
+          ManusSwitchRow(
+            title = "Require TLS",
+            description = "Pin the gateway certificate on first connect.",
+            checked = manualTls,
+            enabled = manualEnabled,
+            onCheckedChange = viewModel::setManualTls,
           )
 
           val hostOk = manualHost.trim().isNotEmpty()
           val portOk = manualPort in 1..65535
-          Button(
+          ManusButton(
+            label = "Connect (Manual)",
+            enabled = manualEnabled && hostOk && portOk,
             onClick = {
               NodeForegroundService.start(context)
               viewModel.connectManual()
+              showSnackbar("Connecting…")
             },
-            enabled = manualEnabled && hostOk && portOk,
-          ) {
-            Text("Connect (Manual)")
-          }
+          )
         }
       }
     }
 
-    item { HorizontalDivider() }
+    item { ManusDivider() }
 
     // Voice
-    item { Text("Voice", style = MaterialTheme.typography.titleSmall) }
+    item { ManusSectionHeader("Voice") }
     item {
       val enabled = voiceWakeMode != VoiceWakeMode.Off
-      ListItem(
-        headlineContent = { Text("Voice Wake") },
-        supportingContent = { Text(voiceWakeStatusText) },
-        trailingContent = {
-          Switch(
-            checked = enabled,
-            onCheckedChange = { on ->
-              if (on) {
-                val micOk =
-                  ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                    PackageManager.PERMISSION_GRANTED
-                if (!micOk) audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                viewModel.setVoiceWakeMode(VoiceWakeMode.Foreground)
-              } else {
-                viewModel.setVoiceWakeMode(VoiceWakeMode.Off)
+      ManusCard {
+        ManusSwitchRow(
+          title = "Voice Wake",
+          description = voiceWakeStatusText,
+          checked = enabled,
+          onCheckedChange = { on ->
+            if (on) {
+              val micOk =
+                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                  PackageManager.PERMISSION_GRANTED
+              if (!micOk) {
+                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                showSnackbar("Microphone permission required")
               }
-            },
-          )
-        },
-      )
+              viewModel.setVoiceWakeMode(VoiceWakeMode.Foreground)
+            } else {
+              viewModel.setVoiceWakeMode(VoiceWakeMode.Off)
+            }
+          },
+        )
+      }
     }
     item {
       AnimatedVisibility(visible = voiceWakeMode != VoiceWakeMode.Off) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-          ListItem(
-            headlineContent = { Text("Foreground Only") },
-            supportingContent = { Text("Listens only while Clawdbot is open.") },
-            trailingContent = {
-              RadioButton(
-                selected = voiceWakeMode == VoiceWakeMode.Foreground,
-                onClick = {
-                  val micOk =
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                      PackageManager.PERMISSION_GRANTED
-                  if (!micOk) audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                  viewModel.setVoiceWakeMode(VoiceWakeMode.Foreground)
-                },
-              )
+        ManusCard {
+          ManusRadioRow(
+            title = "Foreground Only",
+            description = "Listens only while Clawdbot is open.",
+            selected = voiceWakeMode == VoiceWakeMode.Foreground,
+            onClick = {
+              val micOk =
+                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                  PackageManager.PERMISSION_GRANTED
+              if (!micOk) {
+                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                showSnackbar("Microphone permission required")
+              }
+              viewModel.setVoiceWakeMode(VoiceWakeMode.Foreground)
             },
           )
-          ListItem(
-            headlineContent = { Text("Always") },
-            supportingContent = { Text("Keeps listening in the background (shows a persistent notification).") },
-            trailingContent = {
-              RadioButton(
-                selected = voiceWakeMode == VoiceWakeMode.Always,
-                onClick = {
-                  val micOk =
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                      PackageManager.PERMISSION_GRANTED
-                  if (!micOk) audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                  viewModel.setVoiceWakeMode(VoiceWakeMode.Always)
-                },
-              )
+          ManusRadioRow(
+            title = "Always",
+            description = "Keeps listening in the background (shows a persistent notification).",
+            selected = voiceWakeMode == VoiceWakeMode.Always,
+            onClick = {
+              val micOk =
+                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                  PackageManager.PERMISSION_GRANTED
+              if (!micOk) {
+                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                showSnackbar("Microphone permission required")
+              }
+              viewModel.setVoiceWakeMode(VoiceWakeMode.Always)
             },
           )
         }
       }
     }
     item {
-      OutlinedTextField(
-        value = wakeWordsText,
-        onValueChange = setWakeWordsText,
-        label = { Text("Wake Words (comma-separated)") },
-        modifier =
-          Modifier.fillMaxWidth().onFocusChanged { focusState ->
-            if (focusState.isFocused) {
-              wakeWordsHadFocus = true
-            } else if (wakeWordsHadFocus) {
-              wakeWordsHadFocus = false
-              commitWakeWords()
-            }
-          },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions =
-          KeyboardActions(
-            onDone = {
-              commitWakeWords()
-              focusManager.clearFocus()
+      ManusCard {
+        ManusOutlinedField(
+          value = wakeWordsText,
+          onValueChange = setWakeWordsText,
+          label = "Wake Words (comma-separated)",
+          modifier =
+            Modifier.onFocusChanged { focusState ->
+              if (focusState.isFocused) {
+                wakeWordsHadFocus = true
+              } else if (wakeWordsHadFocus) {
+                wakeWordsHadFocus = false
+                commitWakeWords()
+              }
             },
-          ),
-      )
+          singleLine = true,
+          keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+          keyboardActions =
+            KeyboardActions(
+              onDone = {
+                commitWakeWords()
+                focusManager.clearFocus()
+              },
+            ),
+        )
+        ManusButton(label = "Reset defaults", onClick = viewModel::resetWakeWordsDefaults)
+      }
     }
-    item { Button(onClick = viewModel::resetWakeWordsDefaults) { Text("Reset defaults") } }
     item {
       Text(
         if (isConnected) {
@@ -578,16 +767,19 @@ fun SettingsSheet(viewModel: MainViewModel) {
       )
     }
 
-    item { HorizontalDivider() }
+    item { ManusDivider() }
 
     // Camera
-    item { Text("Camera", style = MaterialTheme.typography.titleSmall) }
+    item { ManusSectionHeader("Camera") }
     item {
-      ListItem(
-        headlineContent = { Text("Allow Camera") },
-        supportingContent = { Text("Allows the gateway to request photos or short video clips (foreground only).") },
-        trailingContent = { Switch(checked = cameraEnabled, onCheckedChange = ::setCameraEnabledChecked) },
-      )
+      ManusCard {
+        ManusSwitchRow(
+          title = "Allow Camera",
+          description = "Allows the gateway to request photos or short video clips (foreground only).",
+          checked = cameraEnabled,
+          onCheckedChange = ::setCameraEnabledChecked,
+        )
+      }
     }
     item {
       Text(
@@ -596,10 +788,10 @@ fun SettingsSheet(viewModel: MainViewModel) {
       )
     }
 
-    item { HorizontalDivider() }
+    item { ManusDivider() }
 
     // Messaging
-    item { Text("Messaging", style = MaterialTheme.typography.titleSmall) }
+    item { ManusSectionHeader("Messaging") }
     item {
       val buttonLabel =
         when {
@@ -607,85 +799,72 @@ fun SettingsSheet(viewModel: MainViewModel) {
           smsPermissionGranted -> "Manage"
           else -> "Grant"
         }
-      ListItem(
-        headlineContent = { Text("SMS Permission") },
-        supportingContent = {
-          Text(
-            if (smsPermissionAvailable) {
-              "Allow the gateway to send SMS from this device."
+      ManusCard {
+        Text("SMS Permission", style = MaterialTheme.typography.titleSmall)
+        Text(
+          if (smsPermissionAvailable) {
+            "Allow the gateway to send SMS from this device."
+          } else {
+            "SMS requires a device with telephony hardware."
+          },
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ManusButton(
+          label = buttonLabel,
+          enabled = smsPermissionAvailable,
+          onClick = {
+            if (!smsPermissionAvailable) return@ManusButton
+            if (smsPermissionGranted) {
+              openAppSettings(context)
+              showSnackbar("Open app settings")
             } else {
-              "SMS requires a device with telephony hardware."
-            },
-          )
-        },
-        trailingContent = {
-          Button(
-            onClick = {
-              if (!smsPermissionAvailable) return@Button
-              if (smsPermissionGranted) {
-                openAppSettings(context)
-              } else {
-                smsPermissionLauncher.launch(Manifest.permission.SEND_SMS)
-              }
-            },
-            enabled = smsPermissionAvailable,
-          ) {
-            Text(buttonLabel)
-          }
-        },
-      )
-    }
-
-    item { HorizontalDivider() }
-
-    // Location
-    item { Text("Location", style = MaterialTheme.typography.titleSmall) }
-    item {
-      Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-        ListItem(
-          headlineContent = { Text("Off") },
-          supportingContent = { Text("Disable location sharing.") },
-          trailingContent = {
-            RadioButton(
-              selected = locationMode == LocationMode.Off,
-              onClick = { viewModel.setLocationMode(LocationMode.Off) },
-            )
-          },
-        )
-        ListItem(
-          headlineContent = { Text("While Using") },
-          supportingContent = { Text("Only while Clawdbot is open.") },
-          trailingContent = {
-            RadioButton(
-              selected = locationMode == LocationMode.WhileUsing,
-              onClick = { requestLocationPermissions(LocationMode.WhileUsing) },
-            )
-          },
-        )
-        ListItem(
-          headlineContent = { Text("Always") },
-          supportingContent = { Text("Allow background location (requires system permission).") },
-          trailingContent = {
-            RadioButton(
-              selected = locationMode == LocationMode.Always,
-              onClick = { requestLocationPermissions(LocationMode.Always) },
-            )
+              smsPermissionLauncher.launch(Manifest.permission.SEND_SMS)
+              showSnackbar("SMS permission requested")
+            }
           },
         )
       }
     }
+
+    item { ManusDivider() }
+
+    // Location
+    item { ManusSectionHeader("Location") }
     item {
-      ListItem(
-        headlineContent = { Text("Precise Location") },
-        supportingContent = { Text("Use precise GPS when available.") },
-        trailingContent = {
-          Switch(
-            checked = locationPreciseEnabled,
-            onCheckedChange = ::setPreciseLocationChecked,
-            enabled = locationMode != LocationMode.Off,
-          )
-        },
-      )
+      ManusCard {
+        ManusRadioRow(
+          title = "Off",
+          description = "Disable location sharing.",
+          selected = locationMode == LocationMode.Off,
+          onClick = { viewModel.setLocationMode(LocationMode.Off) },
+        )
+        ManusRadioRow(
+          title = "While Using",
+          description = "Only while Clawdbot is open.",
+          selected = locationMode == LocationMode.WhileUsing,
+          onClick = {
+            requestLocationPermissions(LocationMode.WhileUsing)
+            showSnackbar("Location permission requested")
+          },
+        )
+        ManusRadioRow(
+          title = "Always",
+          description = "Allow background location (requires system permission).",
+          selected = locationMode == LocationMode.Always,
+          onClick = {
+            requestLocationPermissions(LocationMode.Always)
+            showSnackbar("Location permission requested")
+          },
+        )
+        ManusDivider()
+        ManusSwitchRow(
+          title = "Precise Location",
+          description = "Use precise GPS when available.",
+          checked = locationPreciseEnabled,
+          enabled = locationMode != LocationMode.Off,
+          onCheckedChange = ::setPreciseLocationChecked,
+        )
+      }
     }
     item {
       Text(
@@ -694,36 +873,43 @@ fun SettingsSheet(viewModel: MainViewModel) {
       )
     }
 
-    item { HorizontalDivider() }
+    item { ManusDivider() }
 
     // Screen
-    item { Text("Screen", style = MaterialTheme.typography.titleSmall) }
+    item { ManusSectionHeader("Screen") }
     item {
-      ListItem(
-        headlineContent = { Text("Prevent Sleep") },
-        supportingContent = { Text("Keeps the screen awake while Clawdbot is open.") },
-        trailingContent = { Switch(checked = preventSleep, onCheckedChange = viewModel::setPreventSleep) },
-      )
+      ManusCard {
+        ManusSwitchRow(
+          title = "Prevent Sleep",
+          description = "Keeps the screen awake while Clawdbot is open.",
+          checked = preventSleep,
+          onCheckedChange = viewModel::setPreventSleep,
+        )
+      }
     }
 
-    item { HorizontalDivider() }
+    item { ManusDivider() }
 
     // Debug
-    item { Text("Debug", style = MaterialTheme.typography.titleSmall) }
+    item { ManusSectionHeader("Debug") }
     item {
-      ListItem(
-        headlineContent = { Text("Debug Canvas Status") },
-        supportingContent = { Text("Show status text in the canvas when debug is enabled.") },
-        trailingContent = {
-          Switch(
-            checked = canvasDebugStatusEnabled,
-            onCheckedChange = viewModel::setCanvasDebugStatusEnabled,
-          )
-        },
-      )
+      ManusCard {
+        ManusSwitchRow(
+          title = "Debug Canvas Status",
+          description = "Show status text in the canvas when debug is enabled.",
+          checked = canvasDebugStatusEnabled,
+          onCheckedChange = viewModel::setCanvasDebugStatusEnabled,
+        )
+      }
     }
 
-    item { Spacer(modifier = Modifier.height(20.dp)) }
+      item { Spacer(modifier = Modifier.height(20.dp)) }
+    }
+
+    SnackbarHost(
+      hostState = snackbarHostState,
+      modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 12.dp),
+    )
   }
 }
 

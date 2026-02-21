@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.clawdbot.android.chat.ChatSessionEntry
+import com.clawdbot.android.ui.manusBorder
 
 @Composable
 fun ChatSessionsDialog(
@@ -37,7 +40,11 @@ fun ChatSessionsDialog(
       Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text("Sessions", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.weight(1f))
-        FilledTonalIconButton(onClick = onRefresh) {
+        Button(
+          onClick = onRefresh,
+          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface),
+          contentPadding = ButtonDefaults.ContentPadding,
+        ) {
           Icon(Icons.Default.Refresh, contentDescription = "Refresh")
         }
       }
@@ -73,8 +80,9 @@ private fun SessionRow(
       if (isCurrent) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
       } else {
-        MaterialTheme.colorScheme.surfaceContainer
+        MaterialTheme.colorScheme.surface
       },
+    border = manusBorder(alpha = 0.35f),
     modifier = Modifier.fillMaxWidth(),
   ) {
     Row(

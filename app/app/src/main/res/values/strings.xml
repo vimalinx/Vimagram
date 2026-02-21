@@ -37,6 +37,17 @@
     <string name="title_new_chat">New chat</string>
     <string name="label_title">Title</string>
     <string name="label_session_name_optional">Session name (optional)</string>
+    <string name="label_model_tier">Model tier</string>
+    <string name="label_profile">Profile</string>
+    <string name="instance_tier_standard_short">Standard</string>
+    <string name="instance_tier_pro_short">Pro</string>
+    <string name="instance_tier_max_short">Max</string>
+    <string name="instance_tier_standard_long">Standard · MiniMax M2.5</string>
+    <string name="instance_tier_pro_long">Pro · GLM-4.7</string>
+    <string name="instance_tier_max_long">Max · GLM-5</string>
+    <string name="instance_profile_ecom">E-commerce</string>
+    <string name="instance_profile_docs">Writing</string>
+    <string name="instance_profile_media">Creator</string>
     <string name="action_create">Create</string>
     <string name="title_add_host">Add host</string>
     <string name="label_host_name">Host name</string>
@@ -56,6 +67,7 @@
     <string name="title_logout_confirm">Log out?</string>
     <string name="msg_logout_confirm">You will need to sign in again to continue.</string>
     <string name="tab_chat">Chat</string>
+    <string name="tab_devices">Devices</string>
     <string name="tab_account">Account</string>
     <string name="label_user_value">User: %1$s</string>
     <string name="label_server_value">Server: %1$s</string>

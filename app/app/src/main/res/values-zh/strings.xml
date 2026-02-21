@@ -37,6 +37,17 @@
     <string name="title_new_chat">新建对话</string>
     <string name="label_title">标题</string>
     <string name="label_session_name_optional">会话名称（可选）</string>
+    <string name="label_model_tier">模型档位</string>
+    <string name="label_profile">身份</string>
+    <string name="instance_tier_standard_short">标准</string>
+    <string name="instance_tier_pro_short">专业</string>
+    <string name="instance_tier_max_short">旗舰</string>
+    <string name="instance_tier_standard_long">标准 · MiniMax M2.5</string>
+    <string name="instance_tier_pro_long">专业 · GLM-4.7</string>
+    <string name="instance_tier_max_long">旗舰 · GLM-5</string>
+    <string name="instance_profile_ecom">电商</string>
+    <string name="instance_profile_docs">文书</string>
+    <string name="instance_profile_media">自媒体</string>
     <string name="action_create">创建</string>
     <string name="title_add_host">添加主机</string>
     <string name="label_host_name">主机名称</string>
@@ -56,6 +67,7 @@
     <string name="title_logout_confirm">退出登录？</string>
     <string name="msg_logout_confirm">退出后需要重新登录。</string>
     <string name="tab_chat">对话</string>
+    <string name="tab_devices">设备</string>
     <string name="tab_account">账号</string>
     <string name="label_user_value">用户：%1$s</string>
     <string name="label_server_value">服务器：%1$s</string>
