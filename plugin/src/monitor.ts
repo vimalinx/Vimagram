@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { hostname } from "node:os";
 
@@ -28,6 +29,10 @@ const DEFAULT_POLL_INTERVAL_MS = 1500;
 const DEFAULT_POLL_WAIT_MS = 20000;
 const MAX_POLL_WAIT_MS = 30000;
 const DEFAULT_MACHINE_HEARTBEAT_MS = 30000;
+const DEFAULT_MINIMAX_MODEL_ID = "MiniMax-M2.5";
+
+const providerSyncFingerprint = new Map<string, string>();
+const providerSyncInFlight = new Map<string, Promise<void>>();
 
 type WebhookTarget = {
   account: ResolvedTestAccount;
@@ -157,11 +162,54 @@ function normalizeModeHintMapFromResponse(
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
+function normalizeMinimaxEndpointFromResponse(value: unknown): "global" | "cn" | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "global") return "global";
+  if (normalized === "cn") return "cn";
+  return undefined;
+}
+
+function normalizeMinimaxModelIdFromResponse(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  if (!normalized) return undefined;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(normalized)) return undefined;
+  return normalized;
+}
+
+function normalizeMinimaxApiKeyFromResponse(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  if (!normalized) return undefined;
+  if (normalized.length > 512) return undefined;
+  return normalized;
+}
+
+function parseProviderSyncFromResponse(value: unknown): RegisteredMachineProfile["providerSync"] {
+  const source = asRecord(value);
+  if (!source) return undefined;
+  const minimaxSource = asRecord(source.minimax);
+  if (!minimaxSource) return undefined;
+  const endpoint = normalizeMinimaxEndpointFromResponse(minimaxSource.endpoint);
+  const modelId = normalizeMinimaxModelIdFromResponse(minimaxSource.modelId);
+  const apiKey = normalizeMinimaxApiKeyFromResponse(minimaxSource.apiKey);
+  if (!apiKey) return undefined;
+  return {
+    minimax: {
+      endpoint,
+      modelId,
+      apiKey,
+    },
+  };
+}
+
 function parseRegisteredMachineProfile(payload: unknown): RegisteredMachineProfile | null {
   const root = asRecord(payload);
   const machine = asRecord(root?.machine);
   const config = asRecord(root?.config);
   const routing = asRecord(config?.routing);
+  const providerSync = parseProviderSyncFromResponse(config?.providerSync);
   const machineIdRaw = machine?.machineId;
   const machineId = typeof machineIdRaw === "string" ? normalizeMachineId(machineIdRaw) : undefined;
   if (!machineId) return null;
@@ -179,9 +227,133 @@ function parseRegisteredMachineProfile(payload: unknown): RegisteredMachineProfi
   return {
     machineId,
     routing: parsedRouting,
+    providerSync,
     updatedAt,
     lastSeenAt,
   };
+}
+
+async function runOpenclawCommand(args: string[]): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn("openclaw", args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    });
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      if (stderr.length > 4000) return;
+      stderr += String(chunk);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      const detail = stderr.trim();
+      reject(new Error(detail || `openclaw ${args.join(" ")} exited with code ${String(code ?? "?")}`));
+    });
+  });
+}
+
+function resolveMinimaxProviderId(endpoint: "global" | "cn"): string {
+  return endpoint === "cn" ? "minimax-cn" : "minimax";
+}
+
+function resolveMinimaxBaseUrl(endpoint: "global" | "cn"): string {
+  return endpoint === "cn"
+    ? "https://api.minimaxi.com/anthropic"
+    : "https://api.minimax.io/anthropic";
+}
+
+function buildMinimaxModelsPayload(preferredModelId: string): string {
+  const ids = [preferredModelId, DEFAULT_MINIMAX_MODEL_ID, "MiniMax-M2.5-Lightning"];
+  const uniqueIds = [...new Set(ids.map((value) => value.trim()).filter(Boolean))];
+  const models = uniqueIds.map((id) => ({
+    id,
+    name: id,
+    reasoning: true,
+    input: ["text"],
+    cost: { input: 15, output: 60, cacheRead: 2, cacheWrite: 10 },
+    contextWindow: 200000,
+    maxTokens: 8192,
+  }));
+  return JSON.stringify(models);
+}
+
+async function applyMinimaxProviderSync(params: {
+  account: ResolvedTestAccount;
+  minimax: NonNullable<RegisteredMachineProfile["providerSync"]>["minimax"];
+}): Promise<void> {
+  const apiKey = params.minimax?.apiKey?.trim();
+  if (!apiKey) return;
+  const endpoint = params.minimax.endpoint === "global" ? "global" : "cn";
+  const providerId = resolveMinimaxProviderId(endpoint);
+  const baseUrl = resolveMinimaxBaseUrl(endpoint);
+  const modelId = params.minimax.modelId?.trim() || DEFAULT_MINIMAX_MODEL_ID;
+  await runOpenclawCommand(["config", "set", "models.mode", "merge"]);
+  await runOpenclawCommand([
+    "config",
+    "set",
+    `models.providers.${providerId}.baseUrl`,
+    baseUrl,
+  ]);
+  await runOpenclawCommand([
+    "config",
+    "set",
+    `models.providers.${providerId}.api`,
+    "anthropic-messages",
+  ]);
+  await runOpenclawCommand([
+    "config",
+    "set",
+    `models.providers.${providerId}.apiKey`,
+    apiKey,
+  ]);
+  await runOpenclawCommand([
+    "config",
+    "set",
+    `models.providers.${providerId}.models`,
+    buildMinimaxModelsPayload(modelId),
+  ]);
+}
+
+function scheduleProviderSyncForProfile(params: {
+  account: ResolvedTestAccount;
+  profile: RegisteredMachineProfile;
+  runtime: { log?: (message: string) => void; error?: (message: string) => void };
+}): void {
+  const accountId = params.account.accountId;
+  const minimax = params.profile.providerSync?.minimax;
+  const apiKey = minimax?.apiKey?.trim();
+  if (!apiKey) {
+    providerSyncFingerprint.delete(accountId);
+    return;
+  }
+  const endpoint = minimax.endpoint === "global" ? "global" : "cn";
+  const modelId = minimax.modelId?.trim() || DEFAULT_MINIMAX_MODEL_ID;
+  const fingerprint = `${endpoint}:${modelId}:${apiKey}`;
+  if (providerSyncFingerprint.get(accountId) === fingerprint) {
+    return;
+  }
+  if (providerSyncInFlight.has(accountId)) {
+    return;
+  }
+  const task =
+    (async () => {
+      try {
+        await applyMinimaxProviderSync({ account: params.account, minimax });
+        providerSyncFingerprint.set(accountId, fingerprint);
+        params.runtime.log?.(
+          `vimalinx provider sync applied for ${accountId}: minimax endpoint=${endpoint} model=${modelId}`,
+        );
+      } catch (err) {
+        params.runtime.error?.(`vimalinx provider sync failed for ${accountId}: ${String(err)}`);
+      }
+    })().finally(() => {
+      providerSyncInFlight.delete(accountId);
+    });
+  providerSyncInFlight.set(accountId, task);
 }
 
 async function callMachineEndpoint(params: {
@@ -516,6 +688,11 @@ async function registerMachineForAccount(params: {
       return null;
     }
     setRegisteredMachineProfile(params.account.accountId, profile);
+    scheduleProviderSyncForProfile({
+      account: params.account,
+      profile,
+      runtime: params.runtime,
+    });
     params.runtime.log?.(`vimalinx machine registered: ${profile.machineId}`);
     return profile;
   } catch (err) {
@@ -552,6 +729,11 @@ async function heartbeatMachineForAccount(params: {
     const profile = parseRegisteredMachineProfile(payload);
     if (profile) {
       setRegisteredMachineProfile(params.account.accountId, profile);
+      scheduleProviderSyncForProfile({
+        account: params.account,
+        profile,
+        runtime: params.runtime,
+      });
     }
   } catch (err) {
     params.runtime.error?.(`vimalinx machine heartbeat failed for ${params.account.accountId}: ${String(err)}`);

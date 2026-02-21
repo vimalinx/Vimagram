@@ -5,9 +5,20 @@ export type MachineRoutingConfig = {
   modeSkillsHints?: Record<string, string>;
 };
 
+export type MachineMinimaxProviderSync = {
+  endpoint?: "global" | "cn";
+  modelId?: string;
+  apiKey?: string;
+};
+
+export type MachineProviderSyncConfig = {
+  minimax?: MachineMinimaxProviderSync;
+};
+
 export type RegisteredMachineProfile = {
   machineId: string;
   routing?: MachineRoutingConfig;
+  providerSync?: MachineProviderSyncConfig;
   updatedAt?: number;
   lastSeenAt?: number;
 };

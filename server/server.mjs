@@ -44,6 +44,33 @@ const rateLimitEnabled = (process.env.TEST_RATE_LIMIT ?? "true").trim().toLowerC
 const inviteCodes = normalizeInviteCodes(
   process.env.TEST_INVITE_CODES ?? process.env.TEST_INVITE_CODE ?? "",
 );
+const defaultMinimaxApiKeyFile =
+  process.env.VIMALINX_MINIMAX_API_KEY_FILE?.trim() ||
+  process.env.TEST_MINIMAX_API_KEY_FILE?.trim() ||
+  "";
+const defaultMinimaxApiKey =
+  process.env.VIMALINX_MINIMAX_API_KEY?.trim() || process.env.TEST_MINIMAX_API_KEY?.trim() || "";
+const defaultMinimaxEndpointRaw =
+  process.env.VIMALINX_MINIMAX_ENDPOINT?.trim() ||
+  process.env.TEST_MINIMAX_ENDPOINT?.trim() ||
+  "cn";
+const defaultMinimaxModelIdRaw =
+  process.env.VIMALINX_MINIMAX_MODEL_ID?.trim() ||
+  process.env.TEST_MINIMAX_MODEL_ID?.trim() ||
+  "MiniMax-M2.5";
+
+function readOptionalSecretFile(pathValue) {
+  const filePath = String(pathValue || "").trim();
+  if (!filePath) return "";
+  try {
+    return readFileSync(filePath, "utf-8").trim();
+  } catch {
+    return "";
+  }
+}
+
+const defaultMinimaxApiKeyResolved =
+  defaultMinimaxApiKey || readOptionalSecretFile(defaultMinimaxApiKeyFile);
 
 const users = new Map();
 const machines = new Map();
@@ -275,6 +302,7 @@ function normalizeMachineRecord(entry) {
     updatedAt,
     lastSeenAt,
     routing: normalizeMachineRoutingConfig(entry.routing),
+    providerConfig: normalizeMachineProviderConfig(entry.providerConfig),
   };
 }
 
@@ -470,6 +498,82 @@ function normalizeMachineRoutingConfig(raw) {
   };
 }
 
+function normalizeMinimaxEndpoint(value) {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "global") return "global";
+  if (normalized === "cn") return "cn";
+  return undefined;
+}
+
+function normalizeMinimaxModelId(value) {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  if (!normalized) return undefined;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(normalized)) return undefined;
+  return normalized;
+}
+
+function normalizeMinimaxApiKey(value) {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  if (!normalized) return undefined;
+  if (normalized.length > 512) return undefined;
+  return normalized;
+}
+
+function normalizeMachineProviderConfig(raw) {
+  if (!raw || typeof raw !== "object") return undefined;
+  const minimaxSource =
+    raw.minimax && typeof raw.minimax === "object" ? raw.minimax : undefined;
+  if (!minimaxSource) return undefined;
+  const endpoint = normalizeMinimaxEndpoint(minimaxSource.endpoint);
+  const modelId = normalizeMinimaxModelId(minimaxSource.modelId);
+  const apiKey = normalizeMinimaxApiKey(minimaxSource.apiKey);
+  if (!endpoint && !modelId && !apiKey) return undefined;
+  return {
+    minimax: {
+      endpoint,
+      modelId,
+      apiKey,
+    },
+  };
+}
+
+const defaultMinimaxEndpoint = normalizeMinimaxEndpoint(defaultMinimaxEndpointRaw) ?? "cn";
+const defaultMinimaxModelId = normalizeMinimaxModelId(defaultMinimaxModelIdRaw) ?? "MiniMax-M2.5";
+
+function resolveEffectiveMachineProviderConfig(record) {
+  const machineMinimax = record.providerConfig?.minimax;
+  const endpoint = machineMinimax?.endpoint ?? defaultMinimaxEndpoint;
+  const modelId = machineMinimax?.modelId ?? defaultMinimaxModelId;
+  const apiKey = machineMinimax?.apiKey ?? normalizeMinimaxApiKey(defaultMinimaxApiKeyResolved);
+  if (!apiKey) return undefined;
+  return {
+    minimax: {
+      endpoint,
+      modelId,
+      apiKey,
+    },
+  };
+}
+
+function sanitizeMachineProviderConfigForResponse(config) {
+  const minimax = config?.minimax;
+  if (!minimax) return undefined;
+  const endpoint = normalizeMinimaxEndpoint(minimax.endpoint);
+  const modelId = normalizeMinimaxModelId(minimax.modelId);
+  const hasApiKey = Boolean(normalizeMinimaxApiKey(minimax.apiKey));
+  if (!endpoint && !modelId && !hasApiKey) return undefined;
+  return {
+    minimax: {
+      endpoint,
+      modelId,
+      hasApiKey,
+    },
+  };
+}
+
 function sanitizeMachineRecordForResponse(record) {
   return {
     machineId: record.machineId,
@@ -486,6 +590,7 @@ function sanitizeMachineRecordForResponse(record) {
     updatedAt: record.updatedAt,
     lastSeenAt: record.lastSeenAt,
     routing: record.routing,
+    providerConfig: sanitizeMachineProviderConfigForResponse(record.providerConfig),
   };
 }
 
@@ -663,6 +768,7 @@ function upsertMachineRecord(params) {
     updatedAt: now,
     lastSeenAt: now,
     routing: params.routing ?? existing?.routing,
+    providerConfig: params.hasProviderConfig ? params.providerConfig : existing?.providerConfig,
   };
   machines.set(machineId, next);
   scheduleMachinesSave();
@@ -1277,6 +1383,12 @@ const server = createServer(async (req, res) => {
       sendJson(res, 400, { error: "invalid routing" });
       return;
     }
+    const hasProviderConfigField = Object.prototype.hasOwnProperty.call(payload, "providerConfig");
+    const providerConfig = normalizeMachineProviderConfig(payload.providerConfig);
+    if (hasProviderConfigField && payload.providerConfig && !providerConfig) {
+      sendJson(res, 400, { error: "invalid providerConfig" });
+      return;
+    }
     const machine = upsertMachineRecord({
       userId: auth.user.id,
       machineId,
@@ -1288,11 +1400,16 @@ const server = createServer(async (req, res) => {
       runtimeVersion: payload.runtimeVersion,
       pluginVersion: payload.pluginVersion,
       routing,
+      hasProviderConfig: hasProviderConfigField,
+      providerConfig,
     });
     sendJson(res, 200, {
       ok: true,
       machine: sanitizeMachineRecordForResponse(machine),
-      config: { routing: machine.routing ?? {} },
+      config: {
+        routing: machine.routing ?? {},
+        providerSync: resolveEffectiveMachineProviderConfig(machine) ?? {},
+      },
       serverTime: Date.now(),
     });
     return;
@@ -1349,7 +1466,10 @@ const server = createServer(async (req, res) => {
     sendJson(res, 200, {
       ok: true,
       machine: sanitizeMachineRecordForResponse(next),
-      config: { routing: next.routing ?? {} },
+      config: {
+        routing: next.routing ?? {},
+        providerSync: resolveEffectiveMachineProviderConfig(next) ?? {},
+      },
       serverTime: Date.now(),
     });
     return;
@@ -1378,7 +1498,10 @@ const server = createServer(async (req, res) => {
     sendJson(res, 200, {
       ok: true,
       machine: sanitizeMachineRecordForResponse(machine),
-      config: { routing: machine.routing ?? {} },
+      config: {
+        routing: machine.routing ?? {},
+        providerSync: resolveEffectiveMachineProviderConfig(machine) ?? {},
+      },
       serverTime: Date.now(),
     });
     return;
@@ -1430,6 +1553,12 @@ const server = createServer(async (req, res) => {
       sendJson(res, 400, { error: "invalid routing" });
       return;
     }
+    const hasProviderConfigField = Object.prototype.hasOwnProperty.call(payload, "providerConfig");
+    const providerConfig = normalizeMachineProviderConfig(payload.providerConfig);
+    if (hasProviderConfigField && payload.providerConfig && !providerConfig) {
+      sendJson(res, 400, { error: "invalid providerConfig" });
+      return;
+    }
 
     const displayName = normalizeHintField(payload.machineLabel, 80) ?? userId;
     const accountId = normalizeAccountIdRef(payload.accountId) ?? "default";
@@ -1465,6 +1594,7 @@ const server = createServer(async (req, res) => {
       updatedAt: now,
       lastSeenAt: now,
       routing,
+      providerConfig,
     };
     machines.set(machineId, machine);
     scheduleMachinesSave();
@@ -1566,6 +1696,12 @@ const server = createServer(async (req, res) => {
         sendJson(res, 400, { error: "invalid routing" });
         return;
       }
+      const hasProviderConfigField = Object.prototype.hasOwnProperty.call(payload, "providerConfig");
+      const providerConfig = normalizeMachineProviderConfig(payload.providerConfig);
+      if (hasProviderConfigField && payload.providerConfig && !providerConfig) {
+        sendJson(res, 400, { error: "invalid providerConfig" });
+        return;
+      }
       const hasStatusField = Object.prototype.hasOwnProperty.call(payload, "status");
       const status = normalizeMachineStatus(payload.status);
       if (hasStatusField && payload.status && !status) {
@@ -1581,6 +1717,7 @@ const server = createServer(async (req, res) => {
         updatedAt: now,
         status: status ?? current.status,
         routing: hasRoutingField ? routing : current.routing,
+        providerConfig: hasProviderConfigField ? providerConfig : current.providerConfig,
         machineLabel: hasMachineLabelField ? machineLabel : current.machineLabel,
       };
       machines.set(machineId, next);
