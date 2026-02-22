@@ -1,13 +1,13 @@
-# VimaClawNet Suite
+# Vimalinx Suite
 
 中文 | [English](README.en.md)
 
-VimaClawNet Suite Core 是 Openclaw 的私人服务器解决方案，让机器人（Bots）和移动应用通过自托管服务器通信，无需依赖中心化平台。
+Vimalinx Suite Core 是 Openclaw 的私人服务器解决方案，让机器人（Bots）和移动应用通过自托管服务器通信，无需依赖中心化平台。
 
 **核心组件：**
 - **Server**：自托管聊天服务器，提供用户管理、Token 认证、消息收发等功能
-- **Plugin**：Gateway 插件，通过轮询（poll）或 webhook 将 Openclaw 连接到你的 VimaClawNet 服务器
-- **Android App（VimaClawNet）**：移动端客户端，用于注册、生成 Token、聊天
+- **Plugin**：Gateway 插件，通过轮询（poll）或 webhook 将 Openclaw 连接到你的 Vimalinx 服务器
+- **Android App（Vimagram）**：移动端客户端，用于注册、生成 Token、聊天
 
 **适用场景：**
 - 为 Openclaw 机器人部署私人聊天基础设施
@@ -43,19 +43,19 @@ npm i -g openclaw
 openclaw onboard
 ```
 
-按照提示输入 API 配置信息。**注意**：在配置 channel 时，如果无需telegram等可以选择 **skip**（跳过），因为后续会通过 `./install.sh` 自动配置 VimaClawNet channel。
+按照提示输入 API 配置信息。**注意**：在配置 channel 时，如果无需telegram等可以选择 **skip**（跳过），因为后续会通过 `./install.sh` 自动配置 Vimalinx channel。
 
 #### 步骤 3：克隆仓库
 
 ```bash
-git clone https://github.com/vimalinx/ClawNet.git
-cd ClawNet
+git clone https://github.com/vimalinx/vimalinx-suite-core
+cd vimalinx-suite-core
 ```
 
 #### 步骤 4：在手机上注册并获取 Token
 
-1. 安装 VimaClawNet App（见下方"Android App 安装"）
-2. 启动 VimaClawNet，默认是`http://49.235.88.239:18788`，如果有第三方服务器点击“添加服务器”
+1. 安装 Vimagram App（见下方"Android App 安装"）
+2. 启动 Vimagram，默认是`http://123.60.21.129:8788`，如果有第三方服务器点击“添加服务器”
 3. 点击 **注册**，填写用户信息
 4. 注册成功后，在 **Account** 页面生成 **主机 Token**
 5. 复制生成的 Token
@@ -75,10 +75,10 @@ cd ClawNet
 1. **检查依赖**：验证 `openclaw`、`curl`、`python3` 是否已安装
 2. **复制插件**：将 `plugin` 目录复制到 `~/.openclaw/extensions/vimalinx`
 3. **配置服务器**：
-- 提示输入 **VimaClawNet Server URL**（直接回车使用默认服务器 `http://49.235.88.239:18788`）
+   - 提示输入 **Vimalinx Server URL**（直接回车使用默认服务器 `http://123.60.21.129:8788`）
    - 提示输入 **Token**（粘贴从手机 App 复制的 Token）
 4. **登录验证**：使用 Token 登录服务器，获取 `userId` 和 `token`
-5. **写入配置**：自动更新 `~/.openclaw/openclaw.json`，配置 VimaClawNet channel
+5. **写入配置**：自动更新 `~/.openclaw/openclaw.json`，配置 Vimalinx channel
 6. **自动步骤**（默认执行）：
 - `openclaw doctor --fix`：自动修复依赖问题
 - `openclaw gateway stop/start`：重启 Gateway
@@ -119,7 +119,7 @@ VIMALINX_FORCE_OVERWRITE=1 ./install.sh
 
 ```bash
 # 指定服务器 URL
-export VIMALINX_SERVER_URL="http://your-server:18788"
+export VIMALINX_SERVER_URL="http://your-server:8788"
 
 # 指定 Token
 export VIMALINX_TOKEN="your-token-here"
@@ -140,7 +140,7 @@ export VIMALINX_INBOUND_MODE="poll"
   "channels": {
     "vimalinx": {
       "enabled": true,
-      "baseUrl": "http://49.235.88.239:18788",
+      "baseUrl": "http://123.60.21.129:8788",
       "userId": "your-user-id",
       "token": "your-token",
       "inboundMode": "poll",
@@ -162,7 +162,7 @@ export VIMALINX_INBOUND_MODE="poll"
 
 | 字段 | 说明 | 默认值 |
 |------|------|--------|
-| `baseUrl` | VimaClawNet Server 地址 | - |
+| `baseUrl` | Vimalinx Server 地址 | - |
 | `userId` | 用户 ID（从服务器获取） | - |
 | `token` | 认证 Token（从服务器获取） | - |
 | `inboundMode` | 入站模式：`poll`（轮询）或 `webhook`（推送） | `poll` |
@@ -173,7 +173,7 @@ export VIMALINX_INBOUND_MODE="poll"
 
 ---
 
-## 📲 Android App（VimaClawNet）
+## 📲 Android App（Vimagram）
 
 ### 安装 App
 
@@ -190,9 +190,9 @@ cd app
 
 ### 使用 App
 
-1. **启动 App**：打开 VimaClawNet
+1. **启动 App**：打开 Vimagram
 2. **配置服务器**：
-   - 输入服务器地址（例如：`http://49.235.88.239:18788`）
+   - 输入服务器地址（例如：`http://123.60.21.129:8788`）
    - ~~ 如果使用 HTTPS，请确保服务器证书有效 ~~ 暂未支持
 3. **注册账号**：
    - 填写用户名、密码
@@ -210,7 +210,7 @@ cd app
 
 ### 特性
 
-- 直接连接 VimaClawNet Server（无需魔法）
+- 直接连接 Vimalinx Server（无需魔法）
 - 账号页展示已连接主机 Token，方便恢复
 - 支持语言切换（系统/中文/English）
 
@@ -218,93 +218,12 @@ cd app
 
 ## 🚀 Server 部署（高级用户）
 
-如果需要自部署 VimaClawNet Server，请参考 `server/README.md`。
-
-### 一键部署（推荐）
-
-第一步，在云主机上（仅部署 Server）：
-
-```bash
-git clone https://github.com/vimalinx/ClawNet.git
-cd ClawNet
-sudo bash scripts/deploy-server-oneclick.sh
-```
-
-如果你希望交互式填写参数，改用：
-
-```bash
-sudo bash scripts/deploy-server-interactive.sh
-```
-
-该脚本会自动完成（服务器侧）：
-
-1. 安装依赖（Node.js 22+、git、python3 等）
-2. 部署并启动 `vima-clawnet-server` systemd 服务
-3. 生成/更新服务环境文件并持久化用户数据
-
-第二步，在本地 OpenClaw 机器上（安装插件并接入服务器）：
-
-```bash
-git clone https://github.com/vimalinx/ClawNet.git
-cd ClawNet
-bash scripts/deploy-openclaw-node.sh --server-url http://49.235.88.239:18788 --token <机器贡献者token>
-```
-
-如果你希望交互式填写参数，改用：
-
-```bash
-bash scripts/deploy-openclaw-node-interactive.sh
-```
-
-默认只需要输入「机器贡献者 token」即可自动连接服务器并拉取配置。
-
-脚本执行完成后会在目标用户主目录生成交互式入口：
-
-```bash
-bash ~/install.sh
-```
-
-之后重装/换服可直接运行这个 `install.sh`。
-
-如需“先备份 OpenClaw 配置再重装配置”，可在一键脚本里加：
-
-```bash
-sudo bash scripts/deploy-openclaw-node.sh \
-  --server-url http://49.235.88.239:18788 \
-  --token <机器贡献者token> \
-  --backup-config true \
-  --reinstall-config true
-```
-
-备份文件默认保存到：`~/.openclaw/backups/openclaw.<timestamp>.json`
-
-机器贡献者 token 由服务器 GUI 生成：
-
-```text
-http://49.235.88.239:18788/admin
-```
-
-在 GUI 点击“机器贡献者注册（无密码）”即可生成 token 和一键命令。
-
-机器池图形管理页：
-
-```text
-http://49.235.88.239:18788/admin
-```
-
-如果你确实希望在服务器机器上也执行 OpenClaw 集成（不推荐默认），可显式启用：
-
-```bash
-sudo bash scripts/deploy-server-oneclick.sh --with-openclaw \
-  --openclaw-user-id <你的userId> \
-  --openclaw-token <你的token> \
-  --mode-account-map quick=default,code=code,deep=deep
-```
+如果需要自部署 Vimalinx Server，请参考 `server/README.md`。
 
 ### 快速启动（本地测试）
 
 ```bash
-export TEST_SERVER_PORT=18788
+export TEST_SERVER_PORT=8788
 export TEST_USERS_FILE=/path/to/vimalinx-users.json
 export TEST_ALLOW_REGISTRATION=true
 
@@ -346,7 +265,7 @@ npm install -g openclaw@latest
 - 网络连接问题
 
 **解决方法：**
-1. 在 VimaClawNet App 中重新生成 Token
+1. 在 Vimagram App 中重新生成 Token
 2. 检查服务器地址是否正确（确保包含端口号）
 3. 使用 `curl` 测试服务器连接：
 

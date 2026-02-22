@@ -15,7 +15,6 @@
 - **Token 认证**：安全的用户认证机制
 - **多账号支持**：可配置多个 Vimalinx Server 用户
 - **自动重连**：网络断开时自动尝试重连
-- **机器池自动注册**：插件启动后自动注册到服务器机器池并心跳同步配置
 
 ---
 
@@ -151,11 +150,6 @@ openclaw onboard
 | `webhookToken` | string | 否 | 等于 `token` | Webhook 认证 Token（webhook 模式） |
 | `dmPolicy` | string | 否 | `open` | 私聊策略：`open` 或 `whitelist` |
 | `allowFrom` | string[] | 否 | `["*"]` | 允许发送消息的来源列表 |
-| `autoRegisterMachine` | boolean | 否 | `true` | 启动时自动注册到服务器机器池 |
-| `machineId` | string | 否 | 自动生成 | 机器唯一 ID（建议固定） |
-| `machineLabel` | string | 否 | `<hostname>:<userId>:<accountId>` | 机器显示名称 |
-| `machineHeartbeatMs` | number | 否 | `30000` | 机器心跳间隔（毫秒） |
-| `modeAccountMap` | object | 否 | - | 模式分流映射（`modeId -> accountId`） |
 
 ### 入站模式说明
 

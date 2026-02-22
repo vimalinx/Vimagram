@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ChatMarkdown(text: String, textColor: Color) {
   val blocks = remember(text) { splitMarkdown(text) }
-  val inlineCodeBg = MaterialTheme.colorScheme.surface
+  val inlineCodeBg = MaterialTheme.colorScheme.surfaceContainerLow
 
   Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
     for (b in blocks) {

@@ -72,7 +72,7 @@ async function loginTestUser(params: {
 }
 
 const DEFAULT_TEST_SERVER_URL = "https://vimagram.vimalinx.xyz";
-const OFFICIAL_SERVER_LABEL = "VimaClawNet official";
+const OFFICIAL_SERVER_LABEL = "Vimalinx official";
 const CUSTOM_SERVER_LABEL = "Custom server";
 
 function setTestAccountConfig(
@@ -143,7 +143,7 @@ async function promptTestAllowFrom(params: {
   const existing = resolveAllowFrom(resolved.config.allowFrom);
 
   const raw = await params.prompter.text({
-    message: "VimaClawNet allowFrom (comma-separated user ids or *)",
+    message: "Vimalinx allowFrom (comma-separated user ids or *)",
     placeholder: "*",
     initialValue: existing.join(", "),
     validate: (value) => (String(value ?? "").trim() ? undefined : "Required"),
@@ -160,7 +160,7 @@ async function promptTestAllowFrom(params: {
 }
 
 const dmPolicy: ChannelOnboardingDmPolicy = {
-  label: "VimaClawNet Server",
+  label: "Vimalinx Server",
   channel,
   policyKey: "channels.vimalinx.dmPolicy",
   allowFromKey: "channels.vimalinx.allowFrom",
@@ -184,7 +184,7 @@ export const vimalinxOnboardingAdapter: ChannelOnboardingAdapter = {
       channel,
       configured,
       statusLines: [
-        `VimaClawNet Server: ${configured ? "configured" : "needs server URL"}`,
+        `Vimalinx Server: ${configured ? "configured" : "needs server URL"}`,
         `Server: ${serverLabel}`,
       ],
       selectionHint: configured ? `configured · ${serverLabel}` : "local server",
@@ -205,7 +205,7 @@ export const vimalinxOnboardingAdapter: ChannelOnboardingAdapter = {
       accountId = await promptAccountId({
         cfg,
         prompter,
-        label: "VimaClawNet Server",
+        label: "Vimalinx Server",
         currentId: accountId ?? defaultAccountId,
         listAccountIds: listTestAccountIds,
         defaultAccountId,
@@ -218,7 +218,7 @@ export const vimalinxOnboardingAdapter: ChannelOnboardingAdapter = {
       normalizeServerUrl(existing.baseUrl ?? DEFAULT_TEST_SERVER_URL) ?? DEFAULT_TEST_SERVER_URL;
     const isOfficial = normalizedExisting === DEFAULT_TEST_SERVER_URL;
     const serverChoice = await prompter.select({
-      message: "VimaClawNet server",
+      message: "Vimalinx server",
       options: [
         { value: "official", label: OFFICIAL_SERVER_LABEL },
         { value: "custom", label: CUSTOM_SERVER_LABEL },
@@ -238,7 +238,7 @@ export const vimalinxOnboardingAdapter: ChannelOnboardingAdapter = {
     }
 
     const token = await prompter.text({
-      message: "VimaClawNet token",
+      message: "Vimalinx token",
       placeholder: "from the mobile app",
       initialValue: existing.token ?? undefined,
       validate: (value) => (String(value ?? "").trim() ? undefined : "Required"),

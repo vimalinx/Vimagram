@@ -20,11 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.clawdbot.android.ui.manusBorder
 
 @Composable
 fun TalkOrbOverlay(
@@ -49,8 +49,6 @@ fun TalkOrbOverlay(
 
   val trimmed = statusText.trim()
   val showStatus = trimmed.isNotEmpty() && trimmed != "Off"
-  val orbFill = MaterialTheme.colorScheme.surface
-  val orbTextColor = MaterialTheme.colorScheme.onSurface
   val phase =
     when {
       isSpeaking -> "Speaking"
@@ -86,7 +84,21 @@ fun TalkOrbOverlay(
           style = Stroke(width = 3.dp.toPx()),
         )
 
-        drawCircle(color = orbFill, radius = baseRadius, center = center)
+        drawCircle(
+          brush =
+            Brush.radialGradient(
+              colors =
+                listOf(
+                  seamColor.copy(alpha = 0.92f),
+                  seamColor.copy(alpha = 0.40f),
+                  Color.Black.copy(alpha = 0.56f),
+                ),
+              center = center,
+              radius = baseRadius * 1.35f,
+            ),
+          radius = baseRadius,
+          center = center,
+        )
 
         drawCircle(
           color = seamColor.copy(alpha = 0.34f),
@@ -99,14 +111,13 @@ fun TalkOrbOverlay(
 
     if (showStatus) {
       Surface(
-        color = MaterialTheme.colorScheme.surface,
+        color = Color.Black.copy(alpha = 0.40f),
         shape = CircleShape,
-        border = manusBorder(alpha = 0.35f),
       ) {
         Text(
           text = trimmed,
           modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-          color = orbTextColor,
+          color = Color.White.copy(alpha = 0.92f),
           style = MaterialTheme.typography.labelLarge,
           fontWeight = FontWeight.SemiBold,
         )
@@ -114,7 +125,7 @@ fun TalkOrbOverlay(
     } else {
       Text(
         text = phase,
-        color = orbTextColor,
+        color = Color.White.copy(alpha = 0.80f),
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
       )

@@ -13,16 +13,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -38,12 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.dp
 import com.clawdbot.android.chat.ChatSessionEntry
-import com.clawdbot.android.ui.ManusColors
-import com.clawdbot.android.ui.manusBorder
 
 @Composable
 fun ChatComposer(
@@ -63,7 +58,6 @@ fun ChatComposer(
   onAbort: () -> Unit,
   onSend: (text: String) -> Unit,
 ) {
-  val haptics = LocalHapticFeedback.current
   var input by rememberSaveable { mutableStateOf("") }
   var showThinkingMenu by remember { mutableStateOf(false) }
   var showSessionMenu by remember { mutableStateOf(false) }
@@ -76,8 +70,7 @@ fun ChatComposer(
 
   Surface(
     shape = MaterialTheme.shapes.large,
-    color = MaterialTheme.colorScheme.surface,
-    border = manusBorder(alpha = 0.35f),
+    color = MaterialTheme.colorScheme.surfaceContainer,
     tonalElevation = 0.dp,
     shadowElevation = 0.dp,
   ) {
@@ -88,9 +81,8 @@ fun ChatComposer(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Box {
-          Button(
+          FilledTonalButton(
             onClick = { showSessionMenu = true },
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface),
             contentPadding = ButtonDefaults.ContentPadding,
           ) {
             Text("Session: $currentSessionLabel")
@@ -117,9 +109,8 @@ fun ChatComposer(
         }
 
         Box {
-          Button(
+          FilledTonalButton(
             onClick = { showThinkingMenu = true },
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface),
             contentPadding = ButtonDefaults.ContentPadding,
           ) {
             Text("Thinking: ${thinkingLabel(thinkingLevel)}")
@@ -135,25 +126,11 @@ fun ChatComposer(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        FilledIconButton(
-          onClick = {
-            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            onRefresh()
-          },
-          modifier = Modifier.size(42.dp),
-          colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
+        FilledTonalIconButton(onClick = onRefresh, modifier = Modifier.size(42.dp)) {
           Icon(Icons.Default.Refresh, contentDescription = "Refresh")
         }
 
-        FilledIconButton(
-          onClick = {
-            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            onPickImages()
-          },
-          modifier = Modifier.size(42.dp),
-          colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
+        FilledTonalIconButton(onClick = onPickImages, modifier = Modifier.size(42.dp)) {
           Icon(Icons.Default.AttachFile, contentDescription = "Add image")
         }
       }
@@ -169,18 +146,6 @@ fun ChatComposer(
         placeholder = { Text("Message Clawd…") },
         minLines = 2,
         maxLines = 6,
-        shape = MaterialTheme.shapes.large,
-        colors =
-          androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-            disabledContainerColor = MaterialTheme.colorScheme.surface,
-            focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-            cursorColor = MaterialTheme.colorScheme.primary,
-          ),
       )
 
       Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -188,26 +153,22 @@ fun ChatComposer(
         Spacer(modifier = Modifier.weight(1f))
 
         if (pendingRunCount > 0) {
-          FilledIconButton(
+          FilledTonalIconButton(
             onClick = onAbort,
             colors =
-              IconButtonDefaults.filledIconButtonColors(
-                containerColor = ManusColors.Danger.copy(alpha = 0.20f),
-                contentColor = ManusColors.Danger,
+              IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = Color(0x33E74C3C),
+                contentColor = Color(0xFFE74C3C),
               ),
           ) {
             Icon(Icons.Default.Stop, contentDescription = "Abort")
           }
         } else {
-          FilledIconButton(
-            onClick = {
-              val text = input
-              input = ""
-              haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-              onSend(text)
-            },
-            enabled = canSend,
-          ) {
+          FilledTonalIconButton(onClick = {
+            val text = input
+            input = ""
+            onSend(text)
+          }, enabled = canSend) {
             Icon(Icons.Default.ArrowUpward, contentDescription = "Send")
           }
         }
@@ -229,8 +190,7 @@ fun ChatComposer(
 private fun ConnectionPill(sessionLabel: String, healthOk: Boolean) {
   Surface(
     shape = RoundedCornerShape(999.dp),
-    color = MaterialTheme.colorScheme.surface,
-    border = manusBorder(alpha = 0.35f),
+    color = MaterialTheme.colorScheme.surfaceContainerHighest,
   ) {
     Row(
       modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -240,7 +200,7 @@ private fun ConnectionPill(sessionLabel: String, healthOk: Boolean) {
       Surface(
         modifier = Modifier.size(7.dp),
         shape = androidx.compose.foundation.shape.CircleShape,
-        color = if (healthOk) ManusColors.Success else ManusColors.Warning,
+        color = if (healthOk) Color(0xFF2ECC71) else Color(0xFFF39C12),
       ) {}
       Text(sessionLabel, style = MaterialTheme.typography.labelSmall)
       Text(
@@ -304,11 +264,9 @@ private fun AttachmentsStrip(
 
 @Composable
 private fun AttachmentChip(fileName: String, onRemove: () -> Unit) {
-  val haptics = LocalHapticFeedback.current
   Surface(
     shape = RoundedCornerShape(999.dp),
-    color = MaterialTheme.colorScheme.surface,
-    border = manusBorder(alpha = 0.35f),
+    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
   ) {
     Row(
       modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -316,18 +274,11 @@ private fun AttachmentChip(fileName: String, onRemove: () -> Unit) {
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       Text(text = fileName, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-      FilledIconButton(
-        onClick = {
-          haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-          onRemove()
-        },
+      FilledTonalIconButton(
+        onClick = onRemove,
         modifier = Modifier.size(30.dp),
-        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surface),
       ) {
-        Icon(
-          imageVector = Icons.Default.Close,
-          contentDescription = "Remove attachment",
-        )
+        Text("×")
       }
     }
   }

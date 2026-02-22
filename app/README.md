@@ -17,19 +17,6 @@ Vimagram 是 Vimalinx Server 的官方 Android 客户端，提供用户注册、
 
 ---
 
-## 🎨 UI 风格（Manus-like）
-
-当前 Android 客户端的 Compose UI 已统一为简洁的 "Manus" 风格：浅灰画布、白卡片、黑色主按钮、细描边、低阴影和一致的圆角。
-
-在本仓库的 CI/容器环境中，Gradle 的 VFS file watching 可能触发 NPE。构建/测试建议加：
-
-```bash
-GRADLE_OPTS="-Dorg.gradle.vfs.watch=false" ./gradlew :app:assembleDebug
-GRADLE_OPTS="-Dorg.gradle.vfs.watch=false" ./gradlew :app:testDebugUnitTest
-```
-
----
-
 ## 📱 安装指南
 
 ### 方式一：下载 APK 安装（推荐）

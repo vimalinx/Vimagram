@@ -26,9 +26,9 @@ import { getTestRuntime } from "./runtime.js";
 
 const meta = {
   id: "vimalinx",
-  label: "VimaClawNet Server",
-  selectionLabel: "VimaClawNet Server (custom)",
-  detailLabel: "VimaClawNet Server",
+  label: "Vimalinx Server",
+  selectionLabel: "Vimalinx Server (custom)",
+  detailLabel: "Vimalinx Server",
   docsPath: "/channels",
   docsLabel: "channels",
   blurb: "custom webhook + outbound API",
@@ -175,7 +175,7 @@ export const vimalinxPlugin: ChannelPlugin<ResolvedTestAccount> = {
       const groupPolicy = account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
       if (groupPolicy !== "open") return [];
       return [
-        "- VimaClawNet Server groups: groupPolicy=\"open\" allows any member to trigger (mention-gated). Set channels.vimalinx.groupPolicy=\"allowlist\" + channels.vimalinx.groupAllowFrom to restrict senders.",
+        "- Vimalinx Server groups: groupPolicy=\"open\" allows any member to trigger (mention-gated). Set channels.vimalinx.groupPolicy=\"allowlist\" + channels.vimalinx.groupAllowFrom to restrict senders.",
       ];
     },
   },
@@ -197,7 +197,7 @@ export const vimalinxPlugin: ChannelPlugin<ResolvedTestAccount> = {
     resolveTarget: ({ to }) => {
       const trimmed = to?.trim();
       if (!trimmed) {
-        return { ok: false, error: new Error("Delivering to VimaClawNet Server requires --to <chatId>") };
+        return { ok: false, error: new Error("Delivering to Vimalinx Server requires --to <chatId>") };
       }
       return { ok: true, to: trimmed };
     },
@@ -262,7 +262,7 @@ export const vimalinxPlugin: ChannelPlugin<ResolvedTestAccount> = {
     validateInput: ({ input }) => {
       const url = input.url?.trim() || input.httpUrl?.trim();
       if (!url) {
-        return "VimaClawNet Server requires --url (base URL).";
+        return "Vimalinx Server requires --url (base URL).";
       }
       return null;
     },
@@ -320,7 +320,7 @@ export const vimalinxPlugin: ChannelPlugin<ResolvedTestAccount> = {
       const inboundMode =
         account.config.inboundMode?.toLowerCase() === "poll" ? "poll" : "webhook";
       const modeLabel = inboundMode === "poll" ? "poller" : "webhook";
-      ctx.log?.info(`[${account.accountId}] starting VimaClawNet Server ${modeLabel}`);
+      ctx.log?.info(`[${account.accountId}] starting Vimalinx Server ${modeLabel}`);
       ctx.setStatus({
         accountId: account.accountId,
         running: true,

@@ -52,8 +52,6 @@ data class TestChatThread(
   val title: String,
   val lastMessage: String,
   val lastTimestampMs: Long,
-  val instanceModelTierId: String? = null,
-  val instanceIdentityId: String? = null,
   val unreadCount: Int = 0,
   val isPinned: Boolean = false,
   val isArchived: Boolean = false,
@@ -81,54 +79,3 @@ data class TestChatSessionUsage(
   val tokenCount: Int,
   val lastTimestampMs: Long,
 )
-
-data class TestChatModeOption(
-  val id: String,
-  val title: String,
-  val modelHint: String,
-  val agentHint: String,
-  val skillsHint: String,
-  val demoOnly: Boolean = true,
-)
-
-object TestChatModeCatalog {
-  const val QUICK = "quick"
-  const val CODE = "code"
-  const val DEEP = "deep"
-  const val DEFAULT = QUICK
-
-  val options: List<TestChatModeOption> =
-    listOf(
-      TestChatModeOption(
-        id = QUICK,
-        title = "Quick",
-        modelHint = "gpt-4.1-mini",
-        agentHint = "assistant-fast",
-        skillsHint = "short-answer, recall",
-      ),
-      TestChatModeOption(
-        id = CODE,
-        title = "Code",
-        modelHint = "gpt-5-coder",
-        agentHint = "engineering",
-        skillsHint = "coding-standards, backend-patterns",
-      ),
-      TestChatModeOption(
-        id = DEEP,
-        title = "Deep",
-        modelHint = "claude-opus-4.1",
-        agentHint = "deep-research",
-        skillsHint = "iterative-retrieval, verification-loop",
-      ),
-    )
-
-  fun normalizeModeId(raw: String?): String {
-    val normalized = raw?.trim()?.lowercase().orEmpty()
-    return if (options.any { it.id == normalized }) normalized else DEFAULT
-  }
-
-  fun resolveMode(raw: String?): TestChatModeOption {
-    val normalized = normalizeModeId(raw)
-    return options.firstOrNull { it.id == normalized } ?: options.first()
-  }
-}

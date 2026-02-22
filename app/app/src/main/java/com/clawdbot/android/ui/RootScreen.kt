@@ -31,7 +31,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
@@ -67,12 +67,10 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
 import com.clawdbot.android.CameraHudKind
 import com.clawdbot.android.MainViewModel
-import com.clawdbot.android.ui.ManusTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RootScreen(viewModel: MainViewModel) {
-  ManusTheme {
   var sheet by remember { mutableStateOf<Sheet?>(null) }
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
   val safeOverlayInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
@@ -282,14 +280,12 @@ fun RootScreen(viewModel: MainViewModel) {
     ModalBottomSheet(
       onDismissRequest = { sheet = null },
       sheetState = sheetState,
-      containerColor = MaterialTheme.colorScheme.background,
     ) {
       when (currentSheet) {
         Sheet.Chat -> ChatSheet(viewModel = viewModel)
         Sheet.Settings -> SettingsSheet(viewModel = viewModel)
       }
     }
-  }
   }
 }
 
@@ -305,11 +301,11 @@ private fun OverlayIconButton(
   containerColor: ComposeColor? = null,
   contentColor: ComposeColor? = null,
 ) {
-  FilledIconButton(
+  FilledTonalIconButton(
     onClick = onClick,
     modifier = Modifier.size(44.dp),
     colors =
-      IconButtonDefaults.filledIconButtonColors(
+      IconButtonDefaults.filledTonalIconButtonColors(
         containerColor = containerColor ?: overlayContainerColor(),
         contentColor = contentColor ?: overlayIconColor(),
       ),

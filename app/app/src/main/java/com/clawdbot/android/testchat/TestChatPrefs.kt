@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.builtins.ListSerializer
@@ -23,8 +22,6 @@ class TestChatPrefs(context: Context) {
     private const val lastEventIdsKey = "testchat.lastEventIds"
     private const val languageKey = "testchat.language"
     private const val disclaimerKey = "testchat.disclaimerAccepted"
-    private const val deviceIdKey = "testchat.deviceId"
-    private const val modeIdKey = "testchat.modeId"
   }
 
   private val json = Json { ignoreUnknownKeys = true }
@@ -57,12 +54,6 @@ class TestChatPrefs(context: Context) {
 
   private val _disclaimerAccepted = MutableStateFlow(loadDisclaimerAccepted())
   val disclaimerAccepted: StateFlow<Boolean> = _disclaimerAccepted
-
-  private val _deviceId = MutableStateFlow(loadOrCreateDeviceId())
-  val deviceId: StateFlow<String> = _deviceId
-
-  private val _selectedModeId = MutableStateFlow(loadModeId())
-  val selectedModeId: StateFlow<String> = _selectedModeId
 
   private val lastEventIds = loadLastEventIds().toMutableMap()
 
@@ -129,14 +120,6 @@ class TestChatPrefs(context: Context) {
       putBoolean(disclaimerKey, true)
     }
     _disclaimerAccepted.value = true
-  }
-
-  fun saveSelectedMode(modeId: String) {
-    val normalized = TestChatModeCatalog.normalizeModeId(modeId)
-    prefs.edit {
-      putString(modeIdKey, normalized)
-    }
-    _selectedModeId.value = normalized
   }
 
   fun getLastEventId(hostLabel: String): Long? {
@@ -212,20 +195,5 @@ class TestChatPrefs(context: Context) {
 
   private fun loadDisclaimerAccepted(): Boolean {
     return prefs.getBoolean(disclaimerKey, false)
-  }
-
-  private fun loadOrCreateDeviceId(): String {
-    val existing = prefs.getString(deviceIdKey, null)?.trim().orEmpty()
-    if (existing.isNotBlank()) return existing
-    val created = "dev-" + UUID.randomUUID().toString().replace("-", "")
-    prefs.edit {
-      putString(deviceIdKey, created)
-    }
-    return created
-  }
-
-  private fun loadModeId(): String {
-    val raw = prefs.getString(modeIdKey, null)?.trim()
-    return TestChatModeCatalog.normalizeModeId(raw)
   }
 }

@@ -23,8 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.clawdbot.android.ui.ManusColors
-import com.clawdbot.android.ui.manusBorder
 
 @Composable
 fun StatusPill(
@@ -39,8 +37,7 @@ fun StatusPill(
     modifier = modifier,
     shape = RoundedCornerShape(14.dp),
     color = overlayContainerColor(),
-    border = manusBorder(alpha = 0.35f),
-    tonalElevation = 0.dp,
+    tonalElevation = 3.dp,
     shadowElevation = 0.dp,
   ) {
     Row(
@@ -110,8 +107,8 @@ data class StatusActivity(
 )
 
 enum class GatewayState(val title: String, val color: Color) {
-  Connected("Connected", ManusColors.Success),
-  Connecting("Connecting…", ManusColors.Warning),
-  Error("Error", ManusColors.Danger),
-  Disconnected("Offline", ManusColors.Muted),
+  Connected("Connected", Color(0xFF2ECC71)),
+  Connecting("Connecting…", Color(0xFFF1C40F)),
+  Error("Error", Color(0xFFE74C3C)),
+  Disconnected("Offline", Color(0xFF9E9E9E)),
 }

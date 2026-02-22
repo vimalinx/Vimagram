@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VimaClawNet</title>
+    <title>Vimagram</title>
     <style>
       :root {
         color-scheme: light;
@@ -121,15 +121,6 @@
         color: var(--muted);
         letter-spacing: 0.06em;
         text-transform: uppercase;
-      }
-      .brand-link {
-        margin-top: 4px;
-        font-size: 12px;
-      }
-      .brand-link a {
-        color: var(--accent-dark);
-        text-decoration: none;
-        font-weight: 600;
       }
       .status {
         font-size: 12px;
@@ -479,9 +470,8 @@
         <div class="brand">
           <div class="logo">T</div>
           <div>
-            <div class="brand-title">VimaClawNet</div>
-            <div class="brand-sub">Contributor Console</div>
-            <div class="brand-link"><a href="/admin" target="_blank" rel="noopener noreferrer">Machine Console</a></div>
+            <div class="brand-title">Vimagram</div>
+            <div class="brand-sub">Bridge Client</div>
           </div>
         </div>
 
@@ -523,7 +513,7 @@
       <main>
         <div class="chat-header">
           <div class="chat-info">
-            <div class="chat-title" id="headerUserName">VimaClawNet Server</div>
+            <div class="chat-title" id="headerUserName">Vimalinx Server</div>
             <div class="chat-sub" id="headerUserMeta">Connect to start chatting.</div>
           </div>
           <div class="status" id="statusBadge" data-state="disconnected">Disconnected</div>
@@ -574,7 +564,7 @@
       function setActiveUser(userId) {
         if (!userId) {
           activeUserNameEl.textContent = "No session";
-          headerUserNameEl.textContent = "VimaClawNet Server";
+          headerUserNameEl.textContent = "Vimalinx Server";
           headerUserMetaEl.textContent = "Connect to start chatting.";
           chatAvatarEl.textContent = "U";
           return;
@@ -735,7 +725,7 @@
           return;
         }
         const baseUrl = window.location.origin;
-        configSnippetEl.textContent = `channels: {\n  vimalinx: {\n    enabled: true,\n    baseUrl: \"${baseUrl}\",\n    token: \"${token}\",\n    userId: \"${userId}\",\n    inboundMode: \"poll\",\n    dmPolicy: \"open\",\n    allowFrom: [\"*\"],\n    autoRegisterMachine: true,\n    machineHeartbeatMs: 30000\n  }\n}`;
+        configSnippetEl.textContent = `channels: {\n  vimalinx: {\n    enabled: true,\n    baseUrl: \"${baseUrl}\",\n    token: \"${token}\",\n    userId: \"${userId}\",\n    inboundMode: \"poll\",\n    dmPolicy: \"open\",\n    allowFrom: [\"*\"]\n  }\n}`;
       }
 
       function connect() {

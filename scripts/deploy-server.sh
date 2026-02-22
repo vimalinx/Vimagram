@@ -29,7 +29,7 @@ GIT_REPO="${VIMALINX_REPO:-https://github.com/vimalinx/vimalinx-suite-core}"
 INSTALL_DIR="${VIMALINX_INSTALL_DIR:-/opt/vimalinx-suite-core}"
 DATA_DIR="${VIMALINX_DATA_DIR:-/var/lib/vimalinx}"
 USERS_FILE="${VIMALINX_USERS_FILE:-${DATA_DIR}/users.json}"
-PORT="${VIMALINX_PORT:-18788}"
+PORT="${VIMALINX_PORT:-8788}"
 ALLOW_REGISTRATION="${VIMALINX_ALLOW_REGISTRATION:-true}"
 INBOUND_MODE="${VIMALINX_INBOUND_MODE:-poll}"
 SERVER_TOKEN="${VIMALINX_SERVER_TOKEN:-}"
@@ -141,7 +141,7 @@ if [[ ! -f "${USERS_FILE}" ]]; then
   cp "${INSTALL_DIR}/server/users.example.json" "${USERS_FILE}"
 fi
 
-cat >/etc/vima-clawnet-server.env <<EOF
+cat >/etc/vimalinx-server.env <<EOF
 TEST_SERVER_PORT=${PORT}
 TEST_USERS_FILE=${USERS_FILE}
 TEST_USERS_WRITE_FILE=${USERS_FILE}
@@ -153,14 +153,14 @@ TEST_HMAC_SECRET=${HMAC_SECRET}
 TEST_REQUIRE_SIGNATURE=${REQUIRE_SIGNATURE}
 EOF
 
-cat >/etc/systemd/system/vima-clawnet-server.service <<EOF
+cat >/etc/systemd/system/vimalinx-server.service <<EOF
 [Unit]
-Description=VimaClawNet Server
+Description=Vimalinx Server
 After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/vima-clawnet-server.env
+EnvironmentFile=/etc/vimalinx-server.env
 WorkingDirectory=${INSTALL_DIR}
 ExecStart=/usr/bin/node ${INSTALL_DIR}/server/server.mjs
 Restart=always
@@ -171,7 +171,7 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now vima-clawnet-server
-systemctl status --no-pager vima-clawnet-server
+systemctl enable --now vimalinx-server
+systemctl status --no-pager vimalinx-server
 
 echo "Done. Server URL: http://<your-server-ip>:${PORT}"

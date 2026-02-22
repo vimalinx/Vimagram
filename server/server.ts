@@ -20,28 +20,7 @@ type UsersFile = {
   users: UserRecord[];
 };
 
-type ClientModeMetadata = {
-  modeId?: string;
-  modeLabel?: string;
-  modelHint?: string;
-  agentHint?: string;
-  skillsHint?: string;
-};
-
-type InstanceConfig = {
-  userId: string;
-  chatId: string;
-  modelTierId: string;
-  identityId: string;
-  createdAt: number;
-  updatedAt: number;
-};
-
-type InstancesFile = {
-  instances: InstanceConfig[];
-};
-
-type IncomingClientMessage = ClientModeMetadata & {
+type IncomingClientMessage = {
   userId?: string;
   token?: string;
   text?: string;
@@ -51,8 +30,6 @@ type IncomingClientMessage = ClientModeMetadata & {
   senderName?: string;
   chatName?: string;
   id?: string;
-  instanceModelTierId?: string;
-  instanceIdentityId?: string;
 };
 
 type SendPayload = {
@@ -63,7 +40,7 @@ type SendPayload = {
   id?: string;
 };
 
-type InboundMessage = ClientModeMetadata & {
+type InboundMessage = {
   id?: string;
   chatId: string;
   chatName?: string;
@@ -102,87 +79,9 @@ type OutboxEntry = {
   payload: Record<string, unknown>;
 };
 
-type MachineRoutingConfig = {
-  modeAccountMap?: Record<string, string>;
-  modeModelHints?: Record<string, string>;
-  modeAgentHints?: Record<string, string>;
-  modeSkillsHints?: Record<string, string>;
-};
-
-type MachineMinimaxProviderConfig = {
-  endpoint?: "global" | "cn";
-  modelId?: string;
-  apiKey?: string;
-};
-
-type MachineProviderConfig = {
-  minimax?: MachineMinimaxProviderConfig;
-};
-
-type MachineRecord = {
-  machineId: string;
-  userId: string;
-  accountId?: string;
-  machineLabel?: string;
-  hostName?: string;
-  platform?: string;
-  arch?: string;
-  runtimeVersion?: string;
-  pluginVersion?: string;
-  status: "online" | "offline";
-  createdAt: number;
-  updatedAt: number;
-  lastSeenAt: number;
-  routing?: MachineRoutingConfig;
-  providerConfig?: MachineProviderConfig;
-};
-
-type MachinesFile = {
-  machines: MachineRecord[];
-};
-
-type MachineRegisterPayload = {
-  userId?: string;
-  token?: string;
-  machineId?: string;
-  accountId?: string;
-  machineLabel?: string;
-  hostName?: string;
-  platform?: string;
-  arch?: string;
-  runtimeVersion?: string;
-  pluginVersion?: string;
-  routing?: MachineRoutingConfig;
-  providerConfig?: MachineProviderConfig | null;
-};
-
-type MachineHeartbeatPayload = {
-  userId?: string;
-  token?: string;
-  machineId?: string;
-  status?: "online" | "offline";
-};
-
-type MachinePatchPayload = {
-  routing?: MachineRoutingConfig;
-  status?: "online" | "offline";
-  machineLabel?: string;
-  providerConfig?: MachineProviderConfig | null;
-};
-
-type MachineContributorPayload = {
-  userId?: string;
-  password?: string;
-  machineId?: string;
-  machineLabel?: string;
-  accountId?: string;
-  routing?: MachineRoutingConfig;
-  providerConfig?: MachineProviderConfig | null;
-};
-
 const __dirname = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const publicDir = resolve(__dirname, "public");
-const port = Number.parseInt(process.env.TEST_SERVER_PORT ?? "18788", 10);
+const port = Number.parseInt(process.env.TEST_SERVER_PORT ?? "8788", 10);
 const gatewayUrl = process.env.TEST_GATEWAY_URL?.trim();
 const gatewayToken = process.env.TEST_GATEWAY_TOKEN?.trim();
 const serverToken = process.env.TEST_SERVER_TOKEN?.trim();
@@ -193,21 +92,6 @@ const defaultUserId = process.env.TEST_DEFAULT_USER_ID?.trim();
 const defaultUserToken = process.env.TEST_DEFAULT_USER_TOKEN?.trim();
 const inboundMode = (process.env.TEST_INBOUND_MODE ?? "poll").trim().toLowerCase();
 const usersWritePath = process.env.TEST_USERS_WRITE_FILE?.trim() || usersFilePath;
-const machinesFilePath =
-  process.env.TEST_MACHINES_FILE?.trim() ||
-  (usersWritePath
-    ? resolve(dirname(usersWritePath), "machines.json")
-    : usersFilePath
-      ? resolve(dirname(usersFilePath), "machines.json")
-      : resolve(__dirname, "machines.json"));
-
-const instancesFilePath =
-  process.env.TEST_INSTANCES_FILE?.trim() ||
-  (usersWritePath
-    ? resolve(dirname(usersWritePath), "instances.json")
-    : usersFilePath
-      ? resolve(dirname(usersFilePath), "instances.json")
-      : resolve(__dirname, "instances.json"));
 const allowRegistration = (process.env.TEST_ALLOW_REGISTRATION ?? "true").toLowerCase() === "true";
 const hmacSecret = process.env.TEST_HMAC_SECRET?.trim();
 const requireSignature = (process.env.TEST_REQUIRE_SIGNATURE ?? "").trim().toLowerCase();
@@ -220,48 +104,13 @@ const rateLimitEnabled = (process.env.TEST_RATE_LIMIT ?? "true").trim().toLowerC
 const inviteCodes = normalizeInviteCodes(
   process.env.TEST_INVITE_CODES ?? process.env.TEST_INVITE_CODE ?? "",
 );
-const defaultMinimaxApiKeyFile =
-  process.env.VIMALINX_MINIMAX_API_KEY_FILE?.trim() ||
-  process.env.TEST_MINIMAX_API_KEY_FILE?.trim() ||
-  "";
-const defaultMinimaxApiKey =
-  process.env.VIMALINX_MINIMAX_API_KEY?.trim() || process.env.TEST_MINIMAX_API_KEY?.trim() || "";
-const defaultMinimaxEndpointRaw =
-  process.env.VIMALINX_MINIMAX_ENDPOINT?.trim() ||
-  process.env.TEST_MINIMAX_ENDPOINT?.trim() ||
-  "cn";
-const defaultMinimaxModelIdRaw =
-  process.env.VIMALINX_MINIMAX_MODEL_ID?.trim() ||
-  process.env.TEST_MINIMAX_MODEL_ID?.trim() ||
-  "MiniMax-M2.5";
-
-function readOptionalSecretFile(pathValue: string): string {
-  const filePath = pathValue.trim();
-  if (!filePath) return "";
-  try {
-    return readFileSync(filePath, "utf-8").trim();
-  } catch {
-    return "";
-  }
-}
-
-const defaultMinimaxApiKeyResolved =
-  defaultMinimaxApiKey || readOptionalSecretFile(defaultMinimaxApiKeyFile);
 
 const users = new Map<string, UserRecord>();
-const machines = new Map<string, MachineRecord>();
-const instances = new Map<string, InstanceConfig>();
 let didMigrateUsers = false;
 let pendingUsersSave: NodeJS.Timeout | null = null;
-let pendingMachinesSave: NodeJS.Timeout | null = null;
-let pendingInstancesSave: NodeJS.Timeout | null = null;
 
 if (!hasSecretKey) {
   console.log("warning: TEST_SECRET_KEY not set; token hashing is disabled.");
-}
-
-for (const entry of loadInstancesSnapshot()) {
-  instances.set(resolveInstanceKey(entry.userId, entry.chatId), entry);
 }
 
 function normalizeToken(value?: string): string | null {
@@ -467,50 +316,6 @@ function loadUsers() {
 
 loadUsers();
 
-function normalizeMachineRecord(entry: MachineRecord): MachineRecord | null {
-  const machineId = normalizeMachineId(entry.machineId);
-  const userId = normalizeUserId(entry.userId);
-  if (!machineId || !userId) return null;
-  const now = Date.now();
-  const createdAt = normalizeUsageNumber(entry.createdAt) ?? now;
-  const updatedAt = normalizeUsageNumber(entry.updatedAt) ?? createdAt;
-  const lastSeenAt = normalizeUsageNumber(entry.lastSeenAt) ?? updatedAt;
-  const status = normalizeMachineStatus(entry.status) ?? "offline";
-  return {
-    machineId,
-    userId,
-    accountId: normalizeAccountIdRef(entry.accountId),
-    machineLabel: normalizeHintField(entry.machineLabel, 80),
-    hostName: normalizeHintField(entry.hostName, 80),
-    platform: normalizeHintField(entry.platform, 40),
-    arch: normalizeHintField(entry.arch, 40),
-    runtimeVersion: normalizeHintField(entry.runtimeVersion, 40),
-    pluginVersion: normalizeHintField(entry.pluginVersion, 40),
-    status,
-    createdAt,
-    updatedAt,
-    lastSeenAt,
-    routing: normalizeMachineRoutingConfig(entry.routing),
-    providerConfig: normalizeMachineProviderConfig(entry.providerConfig),
-  };
-}
-
-function loadMachines() {
-  if (!machinesFilePath) return;
-  try {
-    const raw = readFileSync(machinesFilePath, "utf-8");
-    const parsed = parseJson<MachinesFile>(raw);
-    for (const entry of parsed?.machines ?? []) {
-      const normalized = normalizeMachineRecord(entry);
-      if (!normalized) continue;
-      machines.set(normalized.machineId, normalized);
-    }
-  } catch {
-  }
-}
-
-loadMachines();
-
 function normalizeUserId(value?: string): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;
@@ -530,209 +335,8 @@ function normalizePassword(value?: string): string | null {
   return trimmed;
 }
 
-function normalizeHintField(value: unknown, maxLength = 120): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  return trimmed.slice(0, maxLength);
-}
-
-function normalizeModeId(value: unknown): string | undefined {
-  const normalized = normalizeHintField(value, 32)?.toLowerCase();
-  if (!normalized) return undefined;
-  if (!/^[a-z0-9_-]{1,32}$/.test(normalized)) return undefined;
-  return normalized;
-}
-
-function resolveModeMetadata(payload: IncomingClientMessage): ClientModeMetadata {
-  return {
-    modeId: normalizeModeId(payload.modeId),
-    modeLabel: normalizeHintField(payload.modeLabel, 40),
-    modelHint: normalizeHintField(payload.modelHint, 120),
-    agentHint: normalizeHintField(payload.agentHint, 120),
-    skillsHint: normalizeHintField(payload.skillsHint, 160),
-  };
-}
-
-function normalizeAccountIdRef(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return undefined;
-  if (!/^[a-z0-9_-]{1,64}$/.test(normalized)) return undefined;
-  return normalized;
-}
-
-function normalizeMachineId(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return undefined;
-  if (!/^[a-z0-9][a-z0-9_-]{2,63}$/.test(normalized)) return undefined;
-  return normalized;
-}
-
-function normalizeMachineStatus(value: unknown): "online" | "offline" | undefined {
-  if (value === "online" || value === "offline") return value;
-  return undefined;
-}
-
-function normalizeModeAccountMap(raw: unknown): Record<string, string> | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const next: Record<string, string> = {};
-  for (const [rawMode, rawAccount] of Object.entries(raw as Record<string, unknown>)) {
-    const modeId = normalizeModeId(rawMode);
-    const accountId = normalizeAccountIdRef(rawAccount);
-    if (!modeId || !accountId) continue;
-    next[modeId] = accountId;
-  }
-  return Object.keys(next).length > 0 ? next : undefined;
-}
-
-function normalizeModeHintMap(
-  raw: unknown,
-  maxLength: number,
-): Record<string, string> | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const next: Record<string, string> = {};
-  for (const [rawMode, rawHint] of Object.entries(raw as Record<string, unknown>)) {
-    const modeId = normalizeModeId(rawMode);
-    const hint = normalizeHintField(rawHint, maxLength);
-    if (!modeId || !hint) continue;
-    next[modeId] = hint;
-  }
-  return Object.keys(next).length > 0 ? next : undefined;
-}
-
-function normalizeMachineRoutingConfig(raw: unknown): MachineRoutingConfig | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const source = raw as Record<string, unknown>;
-  const modeAccountMap = normalizeModeAccountMap(source.modeAccountMap);
-  const modeModelHints = normalizeModeHintMap(source.modeModelHints, 120);
-  const modeAgentHints = normalizeModeHintMap(source.modeAgentHints, 120);
-  const modeSkillsHints = normalizeModeHintMap(source.modeSkillsHints, 160);
-  if (!modeAccountMap && !modeModelHints && !modeAgentHints && !modeSkillsHints) {
-    return undefined;
-  }
-  return {
-    modeAccountMap,
-    modeModelHints,
-    modeAgentHints,
-    modeSkillsHints,
-  };
-}
-
-function normalizeMinimaxEndpoint(value: unknown): "global" | "cn" | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "global") return "global";
-  if (normalized === "cn") return "cn";
-  return undefined;
-}
-
-function normalizeMinimaxModelId(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim();
-  if (!normalized) return undefined;
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(normalized)) return undefined;
-  return normalized;
-}
-
-function normalizeMinimaxApiKey(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim();
-  if (!normalized) return undefined;
-  if (normalized.length > 512) return undefined;
-  return normalized;
-}
-
-function normalizeMachineProviderConfig(raw: unknown): MachineProviderConfig | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const source = raw as Record<string, unknown>;
-  const minimaxSource =
-    source.minimax && typeof source.minimax === "object"
-      ? (source.minimax as Record<string, unknown>)
-      : undefined;
-  if (!minimaxSource) return undefined;
-  const endpoint = normalizeMinimaxEndpoint(minimaxSource.endpoint);
-  const modelId = normalizeMinimaxModelId(minimaxSource.modelId);
-  const apiKey = normalizeMinimaxApiKey(minimaxSource.apiKey);
-  if (!endpoint && !modelId && !apiKey) return undefined;
-  return {
-    minimax: {
-      endpoint,
-      modelId,
-      apiKey,
-    },
-  };
-}
-
-const defaultMinimaxEndpoint = normalizeMinimaxEndpoint(defaultMinimaxEndpointRaw) ?? "cn";
-const defaultMinimaxModelId = normalizeMinimaxModelId(defaultMinimaxModelIdRaw) ?? "MiniMax-M2.5";
-
-function resolveEffectiveMachineProviderConfig(
-  record: MachineRecord,
-): MachineProviderConfig | undefined {
-  const machineMinimax = record.providerConfig?.minimax;
-  const endpoint = machineMinimax?.endpoint ?? defaultMinimaxEndpoint;
-  const modelId = machineMinimax?.modelId ?? defaultMinimaxModelId;
-  const apiKey = machineMinimax?.apiKey ?? normalizeMinimaxApiKey(defaultMinimaxApiKeyResolved);
-  if (!apiKey) return undefined;
-  return {
-    minimax: {
-      endpoint,
-      modelId,
-      apiKey,
-    },
-  };
-}
-
-function sanitizeMachineProviderConfigForResponse(
-  config: MachineProviderConfig | undefined,
-): Record<string, unknown> | undefined {
-  const minimax = config?.minimax;
-  if (!minimax) return undefined;
-  const endpoint = normalizeMinimaxEndpoint(minimax.endpoint);
-  const modelId = normalizeMinimaxModelId(minimax.modelId);
-  const hasApiKey = Boolean(normalizeMinimaxApiKey(minimax.apiKey));
-  if (!endpoint && !modelId && !hasApiKey) return undefined;
-  return {
-    minimax: {
-      endpoint,
-      modelId,
-      hasApiKey,
-    },
-  };
-}
-
-function sanitizeMachineRecordForResponse(record: MachineRecord): Record<string, unknown> {
-  return {
-    machineId: record.machineId,
-    userId: record.userId,
-    accountId: record.accountId,
-    machineLabel: record.machineLabel,
-    hostName: record.hostName,
-    platform: record.platform,
-    arch: record.arch,
-    runtimeVersion: record.runtimeVersion,
-    pluginVersion: record.pluginVersion,
-    status: record.status,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-    lastSeenAt: record.lastSeenAt,
-    routing: record.routing,
-    providerConfig: sanitizeMachineProviderConfigForResponse(record.providerConfig),
-  };
-}
-
 function generateToken(): string {
   return randomUUID().replace(/-/g, "");
-}
-
-function generateContributorUserId(): string {
-  let next = `contrib_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
-  while (users.has(next)) {
-    next = `contrib_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
-  }
-  return next;
 }
 
 function makeDeviceKey(userId: string, token: string): string {
@@ -798,225 +402,6 @@ function scheduleUsersSave(): void {
       // Ignore background save failures; explicit writes handle errors.
     }
   }, 1000);
-}
-
-function saveMachinesSnapshot(entries: MachineRecord[]) {
-  if (!machinesFilePath) return;
-  mkdirSync(dirname(machinesFilePath), { recursive: true });
-  const data = JSON.stringify({ machines: entries }, null, 2);
-  writeFileSync(machinesFilePath, data, "utf-8");
-}
-
-function loadInstancesSnapshot(): InstanceConfig[] {
-  try {
-    const raw = readFileSync(instancesFilePath, "utf-8");
-    const parsed = parseJson<InstancesFile>(raw);
-    const list = Array.isArray(parsed?.instances) ? parsed.instances : [];
-    return list
-      .map((entry) => {
-        const userId = normalizeUserId(entry.userId);
-        const chatId = typeof entry.chatId === "string" ? entry.chatId.trim() : "";
-        const modelTierId = typeof entry.modelTierId === "string" ? entry.modelTierId.trim() : "";
-        const identityId = typeof entry.identityId === "string" ? entry.identityId.trim() : "";
-        const createdAt = Number.isFinite(entry.createdAt) ? entry.createdAt : Date.now();
-        const updatedAt = Number.isFinite(entry.updatedAt) ? entry.updatedAt : createdAt;
-        if (!userId || !chatId || !modelTierId || !identityId) return null;
-        return {
-          userId,
-          chatId,
-          modelTierId,
-          identityId,
-          createdAt,
-          updatedAt,
-        } satisfies InstanceConfig;
-      })
-      .filter((entry): entry is InstanceConfig => Boolean(entry));
-  } catch {
-    return [];
-  }
-}
-
-function scheduleSaveInstancesSnapshot(entries: InstanceConfig[]) {
-  if (pendingInstancesSave) clearTimeout(pendingInstancesSave);
-  pendingInstancesSave =
-    setTimeout(() => {
-      pendingInstancesSave = null;
-      mkdirSync(dirname(instancesFilePath), { recursive: true });
-      const payload: InstancesFile = { instances: entries };
-      writeFileSync(instancesFilePath, JSON.stringify(payload, null, 2) + "\n", "utf-8");
-    }, 150);
-}
-
-function upsertInstanceConfig(params: {
-  userId: string;
-  chatId: string;
-  modelTierId: string;
-  identityId: string;
-}): InstanceConfig {
-  const key = `${params.userId}:${params.chatId}`;
-  const existing = instances.get(key);
-  const now = Date.now();
-  const next: InstanceConfig = {
-    userId: params.userId,
-    chatId: params.chatId,
-    modelTierId: params.modelTierId,
-    identityId: params.identityId,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  };
-  instances.set(key, next);
-  const entries = [...instances.values()].sort((a, b) => {
-    if (a.userId !== b.userId) return a.userId.localeCompare(b.userId);
-    return a.chatId.localeCompare(b.chatId);
-  });
-  scheduleSaveInstancesSnapshot(entries);
-  return next;
-}
-
-function resolveInstanceKey(userId: string, chatId: string): string {
-  return `${userId}:${chatId}`;
-}
-
-type InstanceTier = { id: string; label: string; modelHint: string };
-type InstanceIdentity = { id: string; label: string; skillsHint: string; agentHint: string };
-
-const INSTANCE_TIERS: InstanceTier[] = [
-  { id: "m2.5", label: "Standard", modelHint: "minimax/m2.5" },
-  { id: "glm-4.7", label: "Pro", modelHint: "zai/glm-4.7" },
-  { id: "glm-5", label: "Max", modelHint: "zai/glm-5" },
-];
-
-const INSTANCE_IDENTITIES: InstanceIdentity[] = [
-  {
-    id: "ecom",
-    label: "E-commerce",
-    agentHint: "ecom",
-    skillsHint: "ecom: listings, ads, pricing, seo",
-  },
-  {
-    id: "docs",
-    label: "Writing",
-    agentHint: "docs",
-    skillsHint: "docs: contracts, proposals, formal writing",
-  },
-  {
-    id: "media",
-    label: "Creator",
-    agentHint: "media",
-    skillsHint: "media: scripts, captions, hooks, content calendar",
-  },
-];
-
-function normalizeInstanceTierId(raw: unknown): string | null {
-  const trimmed = typeof raw === "string" ? raw.trim() : "";
-  if (!trimmed) return null;
-  return INSTANCE_TIERS.some((t) => t.id === trimmed) ? trimmed : null;
-}
-
-function normalizeInstanceIdentityId(raw: unknown): string | null {
-  const trimmed = typeof raw === "string" ? raw.trim() : "";
-  if (!trimmed) return null;
-  return INSTANCE_IDENTITIES.some((t) => t.id === trimmed) ? trimmed : null;
-}
-
-function encodeInstanceModeId(config: InstanceConfig): string {
-  const tier = config.modelTierId.trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
-  const identity = config.identityId.trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
-  return `inst_${tier}_${identity}`;
-}
-
-function resolveInstanceModeMetadata(config: InstanceConfig): ClientModeMetadata {
-  const tier = INSTANCE_TIERS.find((t) => t.id === config.modelTierId);
-  const identity = INSTANCE_IDENTITIES.find((i) => i.id === config.identityId);
-  const tierLabel = tier?.label ?? config.modelTierId;
-  const identityLabel = identity?.label ?? config.identityId;
-  const modeId = encodeInstanceModeId(config);
-  return {
-    modeId,
-    modeLabel: `${tierLabel} · ${identityLabel}`,
-    modelHint: tier?.modelHint,
-    agentHint: identity?.agentHint,
-    skillsHint: identity?.skillsHint,
-  };
-}
-
-function scheduleMachinesSave(): void {
-  if (!machinesFilePath) return;
-  if (pendingMachinesSave) return;
-  pendingMachinesSave = setTimeout(() => {
-    pendingMachinesSave = null;
-    try {
-      const entries = [...machines.values()].sort((a, b) => a.machineId.localeCompare(b.machineId));
-      saveMachinesSnapshot(entries);
-    } catch {
-    }
-  }, 1000);
-}
-
-function upsertMachineRecord(params: {
-  userId: string;
-  machineId?: string;
-  accountId?: string;
-  machineLabel?: string;
-  hostName?: string;
-  platform?: string;
-  arch?: string;
-  runtimeVersion?: string;
-  pluginVersion?: string;
-  routing?: MachineRoutingConfig;
-  hasProviderConfig?: boolean;
-  providerConfig?: MachineProviderConfig;
-}): MachineRecord {
-  const machineId =
-    normalizeMachineId(params.machineId) ?? `m_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
-  const now = Date.now();
-  const existing = machines.get(machineId);
-  const createdAt = existing?.createdAt ?? now;
-  const next: MachineRecord = {
-    machineId,
-    userId: params.userId,
-    accountId: normalizeAccountIdRef(params.accountId) ?? existing?.accountId,
-    machineLabel: normalizeHintField(params.machineLabel, 80) ?? existing?.machineLabel,
-    hostName: normalizeHintField(params.hostName, 80) ?? existing?.hostName,
-    platform: normalizeHintField(params.platform, 40) ?? existing?.platform,
-    arch: normalizeHintField(params.arch, 40) ?? existing?.arch,
-    runtimeVersion: normalizeHintField(params.runtimeVersion, 40) ?? existing?.runtimeVersion,
-    pluginVersion: normalizeHintField(params.pluginVersion, 40) ?? existing?.pluginVersion,
-    status: "online",
-    createdAt,
-    updatedAt: now,
-    lastSeenAt: now,
-    routing: params.routing ?? existing?.routing,
-    providerConfig: params.hasProviderConfig ? params.providerConfig : existing?.providerConfig,
-  };
-  machines.set(machineId, next);
-  scheduleMachinesSave();
-  return next;
-}
-
-function resolveOwnedMachine(userId: string, machineId?: string): MachineRecord | null {
-  const normalized = normalizeMachineId(machineId);
-  if (!normalized) return null;
-  const entry = machines.get(normalized);
-  if (!entry) return null;
-  if (entry.userId !== userId) return null;
-  return entry;
-}
-
-function touchMachineHeartbeat(params: {
-  entry: MachineRecord;
-  status?: "online" | "offline";
-}): MachineRecord {
-  const now = Date.now();
-  const next: MachineRecord = {
-    ...params.entry,
-    status: params.status ?? "online",
-    updatedAt: now,
-    lastSeenAt: now,
-  };
-  machines.set(next.machineId, next);
-  scheduleMachinesSave();
-  return next;
 }
 
 function ensureTokenUsage(entry: UserRecord, token: string): TokenUsage | null {
@@ -1492,7 +877,6 @@ function buildInboundMessage(
   const senderName = payload.senderName?.trim() || user.displayName || user.id;
   const chatName = payload.chatName?.trim() || undefined;
   const id = typeof payload.id === "string" ? payload.id.trim() : undefined;
-  const modeMetadata = resolveModeMetadata(payload);
   return {
     id,
     chatId,
@@ -1503,7 +887,6 @@ function buildInboundMessage(
     text: payload.text ?? "",
     mentioned: Boolean(payload.mentioned),
     timestamp: Date.now(),
-    ...modeMetadata,
   };
 }
 
@@ -1557,26 +940,6 @@ function verifyServerToken(req: IncomingMessage, user: UserRecord | null): boole
   return false;
 }
 
-function verifyAdminServerToken(req: IncomingMessage): boolean {
-  const provided = readBearerToken(req);
-  if (!serverToken || !provided) return false;
-  return provided === serverToken;
-}
-
-function resolveMachineAuth(params: {
-  req: IncomingMessage;
-  userId?: string;
-  token?: string;
-}): AuthMatch | null {
-  const userId = params.userId?.trim() || readUserIdHeader(params.req) || undefined;
-  const token = params.token?.trim() || readBearerToken(params.req) || undefined;
-  return resolveAuthMatch({
-    userId,
-    secret: token,
-    allowPassword: false,
-  });
-}
-
 function serveFile(res: ServerResponse, path: string) {
   try {
     const data = readFileSync(path);
@@ -1611,413 +974,8 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && url.pathname === "/api/machine/register") {
-    const clientId = resolveClientIp(req);
-    if (!checkRateLimit(`machine-register:${clientId}`, 120, 60 * 1000)) {
-      sendJson(res, 429, { error: "rate limited" });
-      return;
-    }
-    const raw = await readBody(req, 1024 * 1024).catch((err: Error) => {
-      sendJson(res, 413, { error: err.message });
-      return null;
-    });
-    if (!raw) return;
-    const payload = parseJson<MachineRegisterPayload>(raw);
-    if (!payload) {
-      sendJson(res, 400, { error: "invalid JSON" });
-      return;
-    }
-    const auth = resolveMachineAuth({
-      req,
-      userId: payload.userId,
-      token: payload.token,
-    });
-    if (!auth) {
-      sendJson(res, 401, { error: "unauthorized" });
-      return;
-    }
-    const signatureError = verifySignedRequest({
-      req,
-      body: raw,
-      scope: `machine-register:${auth.user.id}`,
-    });
-    if (signatureError) {
-      sendJson(res, 401, { error: signatureError });
-      return;
-    }
-    const machineId = normalizeMachineId(payload.machineId);
-    if (machineId) {
-      const existing = machines.get(machineId);
-      if (existing && existing.userId !== auth.user.id) {
-        sendJson(res, 409, { error: "machineId already in use" });
-        return;
-      }
-    }
-    const hasRoutingField = Object.prototype.hasOwnProperty.call(payload, "routing");
-    const routing = normalizeMachineRoutingConfig(payload.routing);
-    if (hasRoutingField && payload.routing && !routing) {
-      sendJson(res, 400, { error: "invalid routing" });
-      return;
-    }
-    const hasProviderConfigField = Object.prototype.hasOwnProperty.call(payload, "providerConfig");
-    const providerConfig = normalizeMachineProviderConfig(payload.providerConfig);
-    if (hasProviderConfigField && payload.providerConfig && !providerConfig) {
-      sendJson(res, 400, { error: "invalid providerConfig" });
-      return;
-    }
-    const machine = upsertMachineRecord({
-      userId: auth.user.id,
-      machineId,
-      accountId: payload.accountId,
-      machineLabel: payload.machineLabel,
-      hostName: payload.hostName,
-      platform: payload.platform,
-      arch: payload.arch,
-      runtimeVersion: payload.runtimeVersion,
-      pluginVersion: payload.pluginVersion,
-      routing,
-      hasProviderConfig: hasProviderConfigField,
-      providerConfig,
-    });
-    sendJson(res, 200, {
-      ok: true,
-      machine: sanitizeMachineRecordForResponse(machine),
-      config: {
-        routing: machine.routing ?? {},
-        providerSync: resolveEffectiveMachineProviderConfig(machine) ?? {},
-      },
-      serverTime: Date.now(),
-    });
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/machine/heartbeat") {
-    const clientId = resolveClientIp(req);
-    if (!checkRateLimit(`machine-heartbeat:${clientId}`, 240, 60 * 1000)) {
-      sendJson(res, 429, { error: "rate limited" });
-      return;
-    }
-    const raw = await readBody(req, 1024 * 1024).catch((err: Error) => {
-      sendJson(res, 413, { error: err.message });
-      return null;
-    });
-    if (!raw) return;
-    const payload = parseJson<MachineHeartbeatPayload>(raw);
-    if (!payload) {
-      sendJson(res, 400, { error: "invalid JSON" });
-      return;
-    }
-    const auth = resolveMachineAuth({
-      req,
-      userId: payload.userId,
-      token: payload.token,
-    });
-    if (!auth) {
-      sendJson(res, 401, { error: "unauthorized" });
-      return;
-    }
-    const signatureError = verifySignedRequest({
-      req,
-      body: raw,
-      scope: `machine-heartbeat:${auth.user.id}`,
-    });
-    if (signatureError) {
-      sendJson(res, 401, { error: signatureError });
-      return;
-    }
-    const machine = resolveOwnedMachine(auth.user.id, payload.machineId);
-    if (!machine) {
-      sendJson(res, 404, { error: "machine not found" });
-      return;
-    }
-    const status = normalizeMachineStatus(payload.status);
-    if (payload.status && !status) {
-      sendJson(res, 400, { error: "invalid status" });
-      return;
-    }
-    const next = touchMachineHeartbeat({
-      entry: machine,
-      status,
-    });
-    sendJson(res, 200, {
-      ok: true,
-      machine: sanitizeMachineRecordForResponse(next),
-      config: {
-        routing: next.routing ?? {},
-        providerSync: resolveEffectiveMachineProviderConfig(next) ?? {},
-      },
-      serverTime: Date.now(),
-    });
-    return;
-  }
-
-  if (req.method === "GET" && url.pathname === "/api/machine/config") {
-    const auth = resolveMachineAuth({
-      req,
-      userId: url.searchParams.get("userId") ?? undefined,
-      token: url.searchParams.get("token") ?? undefined,
-    });
-    if (!auth) {
-      sendJson(res, 401, { error: "unauthorized" });
-      return;
-    }
-    const machineId = normalizeMachineId(url.searchParams.get("machineId") ?? undefined);
-    if (!machineId) {
-      sendJson(res, 400, { error: "machineId required" });
-      return;
-    }
-    const machine = resolveOwnedMachine(auth.user.id, machineId);
-    if (!machine) {
-      sendJson(res, 404, { error: "machine not found" });
-      return;
-    }
-    sendJson(res, 200, {
-      ok: true,
-      machine: sanitizeMachineRecordForResponse(machine),
-      config: {
-        routing: machine.routing ?? {},
-        providerSync: resolveEffectiveMachineProviderConfig(machine) ?? {},
-      },
-      serverTime: Date.now(),
-    });
-    return;
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/machines/contributors") {
-    if (!serverToken) {
-      sendJson(res, 403, { error: "server token disabled" });
-      return;
-    }
-    if (!verifyAdminServerToken(req)) {
-      sendJson(res, 401, { error: "unauthorized" });
-      return;
-    }
-    const raw = await readBody(req, 1024 * 1024).catch((err: Error) => {
-      sendJson(res, 413, { error: err.message });
-      return null;
-    });
-    if (!raw) return;
-    const payload = parseJson<MachineContributorPayload>(raw);
-    if (!payload) {
-      sendJson(res, 400, { error: "invalid JSON" });
-      return;
-    }
-
-    const requestedUserId = normalizeUserId(payload.userId ?? undefined);
-    const contributorPassword = normalizePassword(payload.password ?? undefined);
-    if (!contributorPassword) {
-      sendJson(res, 400, { error: "password required" });
-      return;
-    }
-    const userId = requestedUserId ?? generateContributorUserId();
-    if (users.has(userId)) {
-      sendJson(res, 409, { error: "user exists" });
-      return;
-    }
-
-    const machineId =
-      normalizeMachineId(payload.machineId ?? undefined) ??
-      `m_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
-    if (machines.has(machineId)) {
-      sendJson(res, 409, { error: "machineId already in use" });
-      return;
-    }
-
-    const hasRoutingField = Object.prototype.hasOwnProperty.call(payload, "routing");
-    const routing = normalizeMachineRoutingConfig(payload.routing);
-    if (hasRoutingField && payload.routing && !routing) {
-      sendJson(res, 400, { error: "invalid routing" });
-      return;
-    }
-    const hasProviderConfigField = Object.prototype.hasOwnProperty.call(payload, "providerConfig");
-    const providerConfig = normalizeMachineProviderConfig(payload.providerConfig);
-    if (hasProviderConfigField && payload.providerConfig && !providerConfig) {
-      sendJson(res, 400, { error: "invalid providerConfig" });
-      return;
-    }
-
-    const displayName = normalizeHintField(payload.machineLabel, 80) ?? userId;
-    const accountId = normalizeAccountIdRef(payload.accountId) ?? "default";
-    const contributor: UserRecord = {
-      id: userId,
-      displayName,
-      passwordHash: hashPassword(contributorPassword),
-    };
-
-    let token = generateToken();
-    while (isTokenInUse(token, userId)) {
-      token = generateToken();
-    }
-    addUserToken(contributor, token);
-
-    try {
-      const nextUsers = [...users.values(), contributor].sort((a, b) => a.id.localeCompare(b.id));
-      saveUsersSnapshot(nextUsers);
-    } catch (err) {
-      sendJson(res, 500, { error: String(err) });
-      return;
-    }
-    users.set(userId, contributor);
-
-    const now = Date.now();
-    const machine: MachineRecord = {
-      machineId,
-      userId,
-      accountId,
-      machineLabel: displayName,
-      status: "offline",
-      createdAt: now,
-      updatedAt: now,
-      lastSeenAt: now,
-      routing,
-      providerConfig,
-    };
-    machines.set(machineId, machine);
-    scheduleMachinesSave();
-
-    sendJson(res, 200, {
-      ok: true,
-      contributor: {
-        userId,
-        token,
-        machineId,
-        accountId,
-      },
-      machine: sanitizeMachineRecordForResponse(machine),
-      serverTime: now,
-    });
-    return;
-  }
-
-  if (req.method === "GET" && url.pathname === "/api/machines") {
-    const isAdmin = Boolean(serverToken) && verifyAdminServerToken(req);
-    const userAuth = isAdmin
-      ? null
-      : resolveMachineAuth({
-          req,
-          userId: url.searchParams.get("userId") ?? undefined,
-          token: url.searchParams.get("token") ?? undefined,
-        });
-    if (!isAdmin && !userAuth) {
-      sendJson(res, 401, { error: "unauthorized" });
-      return;
-    }
-    const machineList = [...machines.values()]
-      .filter((entry) => (isAdmin ? true : entry.userId === userAuth?.user.id))
-      .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
-      .map((entry) => sanitizeMachineRecordForResponse(entry));
-    sendJson(res, 200, {
-      ok: true,
-      count: machineList.length,
-      machines: machineList,
-      scope: isAdmin ? "admin" : "user",
-      serverTime: Date.now(),
-    });
-    return;
-  }
-
-  if (url.pathname.startsWith("/api/machines/")) {
-    const isAdmin = Boolean(serverToken) && verifyAdminServerToken(req);
-    const userAuth = isAdmin
-      ? null
-      : resolveMachineAuth({
-          req,
-          userId: url.searchParams.get("userId") ?? undefined,
-          token: url.searchParams.get("token") ?? undefined,
-        });
-    if (!isAdmin && !userAuth) {
-      sendJson(res, 401, { error: "unauthorized" });
-      return;
-    }
-    const rawMachineId = url.pathname.slice("/api/machines/".length);
-    const machineId = normalizeMachineId(decodeURIComponent(rawMachineId));
-    if (!machineId) {
-      sendJson(res, 400, { error: "invalid machineId" });
-      return;
-    }
-    const current = machines.get(machineId);
-    if (!current) {
-      sendJson(res, 404, { error: "machine not found" });
-      return;
-    }
-    if (!isAdmin && current.userId !== userAuth?.user.id) {
-      sendJson(res, 404, { error: "machine not found" });
-      return;
-    }
-
-    if (req.method === "GET") {
-      sendJson(res, 200, {
-        ok: true,
-        machine: sanitizeMachineRecordForResponse(current),
-        serverTime: Date.now(),
-      });
-      return;
-    }
-
-    if (req.method === "PATCH") {
-      const raw = await readBody(req, 1024 * 1024).catch((err: Error) => {
-        sendJson(res, 413, { error: err.message });
-        return null;
-      });
-      if (!raw) return;
-      const payload = parseJson<MachinePatchPayload>(raw);
-      if (!payload) {
-        sendJson(res, 400, { error: "invalid JSON" });
-        return;
-      }
-
-      const hasRoutingField = Object.prototype.hasOwnProperty.call(payload, "routing");
-      const routing = normalizeMachineRoutingConfig(payload.routing);
-      if (hasRoutingField && payload.routing && !routing) {
-        sendJson(res, 400, { error: "invalid routing" });
-        return;
-      }
-      const hasProviderConfigField = Object.prototype.hasOwnProperty.call(payload, "providerConfig");
-      const providerConfig = normalizeMachineProviderConfig(payload.providerConfig);
-      if (hasProviderConfigField && payload.providerConfig && !providerConfig) {
-        sendJson(res, 400, { error: "invalid providerConfig" });
-        return;
-      }
-      const hasStatusField = Object.prototype.hasOwnProperty.call(payload, "status");
-      const status = normalizeMachineStatus(payload.status);
-      if (hasStatusField && payload.status && !status) {
-        sendJson(res, 400, { error: "invalid status" });
-        return;
-      }
-      const hasMachineLabelField = Object.prototype.hasOwnProperty.call(payload, "machineLabel");
-      const machineLabel = normalizeHintField(payload.machineLabel, 80);
-
-      const now = Date.now();
-      const next: MachineRecord = {
-        ...current,
-        updatedAt: now,
-        status: status ?? current.status,
-        routing: hasRoutingField ? routing : current.routing,
-        providerConfig: hasProviderConfigField ? providerConfig : current.providerConfig,
-        machineLabel: hasMachineLabelField ? machineLabel : current.machineLabel,
-      };
-      machines.set(machineId, next);
-      scheduleMachinesSave();
-
-      sendJson(res, 200, {
-        ok: true,
-        machine: sanitizeMachineRecordForResponse(next),
-        serverTime: Date.now(),
-      });
-      return;
-    }
-
-    sendJson(res, 405, { error: "method not allowed" });
-    return;
-  }
-
   if (req.method === "GET" && url.pathname === "/") {
     serveFile(res, resolve(publicDir, "index.html"));
-    return;
-  }
-
-  if (req.method === "GET" && (url.pathname === "/admin" || url.pathname === "/admin.html")) {
-    serveFile(res, resolve(publicDir, "admin.html"));
     return;
   }
 
@@ -2321,19 +1279,6 @@ const server = createServer(async (req, res) => {
       lastInboundAt: now,
     });
     const deviceKey = makeDeviceKey(auth.user.id, auth.secret);
-
-    const modelTierId = normalizeInstanceTierId(payload?.instanceModelTierId);
-    const identityId = normalizeInstanceIdentityId(payload?.instanceIdentityId);
-    const normalizedChatId = normalizeChatId(auth.user.id, payload?.chatId);
-    if (modelTierId && identityId && normalizedChatId) {
-      upsertInstanceConfig({
-        userId: auth.user.id,
-        chatId: normalizedChatId,
-        modelTierId,
-        identityId,
-      });
-    }
-
     const message = buildInboundMessage(
       {
         ...payload,
@@ -2410,11 +1355,11 @@ const server = createServer(async (req, res) => {
   sendText(res, 404, "Not Found");
 });
 
-server.listen(Number.isFinite(port) ? port : 18788, bindHost, () => {
+server.listen(Number.isFinite(port) ? port : 8788, bindHost, () => {
   const usersCount = users.size;
-  const location = Number.isFinite(port) ? port : 18788;
+  const location = Number.isFinite(port) ? port : 8788;
   // eslint-disable-next-line no-console
-  console.log(`VimaClawNet Server listening on http://${bindHost}:${location}`);
+  console.log(`Vimalinx Server listening on http://${bindHost}:${location}`);
   // eslint-disable-next-line no-console
   console.log(`inbound mode: ${inboundMode}`);
   if (!gatewayUrl && inboundMode === "webhook") {

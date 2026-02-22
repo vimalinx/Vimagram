@@ -8,7 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
-import com.clawdbot.android.testchat.v2.TestChatV2App
+import com.clawdbot.android.testchat.TestChatApp
 import com.clawdbot.android.testchat.TestChatNotifier
 import com.clawdbot.android.testchat.TestChatViewModel
 
@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     AppLocale.apply(this, viewModel.languageTag.value)
     setContent {
-      TestChatV2App(viewModel = viewModel)
+      TestChatApp(viewModel = viewModel)
     }
     handleNotificationIntent(intent)
   }

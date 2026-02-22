@@ -38,11 +38,6 @@ export type TestAccountConfig = {
   groups?: Record<string, TestGroupConfig>;
   textChunkLimit?: number;
   chunkMode?: "length" | "newline";
-  modeAccountMap?: Record<string, string>;
-  autoRegisterMachine?: boolean;
-  machineId?: string;
-  machineLabel?: string;
-  machineHeartbeatMs?: number;
   security?: TestSecurityConfig;
 };
 
@@ -64,11 +59,6 @@ export type TestInboundMessage = {
   text: string;
   mentioned?: boolean;
   timestamp?: number;
-  modeId?: string;
-  modeLabel?: string;
-  modelHint?: string;
-  agentHint?: string;
-  skillsHint?: string;
 };
 
 export type TestInboundPayload = {

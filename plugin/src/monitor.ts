@@ -1,15 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
-import { hostname } from "node:os";
 
 import type { ResolvedTestAccount } from "./accounts.js";
 import { handleTestInbound } from "./inbound.js";
-import {
-  clearRegisteredMachineProfile,
-  setRegisteredMachineProfile,
-  type RegisteredMachineProfile,
-} from "./machine-state.js";
 import {
   checkAndStoreNonce,
   checkGlobalRateLimit,
@@ -28,11 +20,6 @@ const DEFAULT_WEBHOOK_PATH = "/vimalinx-webhook";
 const DEFAULT_POLL_INTERVAL_MS = 1500;
 const DEFAULT_POLL_WAIT_MS = 20000;
 const MAX_POLL_WAIT_MS = 30000;
-const DEFAULT_MACHINE_HEARTBEAT_MS = 30000;
-const DEFAULT_MINIMAX_MODEL_ID = "MiniMax-M2.5";
-
-const providerSyncFingerprint = new Map<string, string>();
-const providerSyncInFlight = new Map<string, Promise<void>>();
 
 type WebhookTarget = {
   account: ResolvedTestAccount;
@@ -90,313 +77,6 @@ function buildPollUrl(baseUrl: string, userId: string, waitMs: number): string {
   url.searchParams.set("userId", userId);
   url.searchParams.set("waitMs", String(waitMs));
   return url.toString();
-}
-
-function buildMachineApiUrl(baseUrl: string, path: string): string {
-  return new URL(path, buildBaseUrl(baseUrl)).toString();
-}
-
-function shouldAutoRegisterMachine(account: ResolvedTestAccount): boolean {
-  return account.config.autoRegisterMachine !== false;
-}
-
-function resolveMachineHeartbeatMs(account: ResolvedTestAccount): number {
-  const raw = Number(account.config.machineHeartbeatMs);
-  if (!Number.isFinite(raw)) return DEFAULT_MACHINE_HEARTBEAT_MS;
-  return Math.max(5000, Math.min(Math.floor(raw), 300000));
-}
-
-function normalizeMachineId(value?: string): string | undefined {
-  const normalized = value?.trim().toLowerCase();
-  if (!normalized) return undefined;
-  if (!/^[a-z0-9][a-z0-9_-]{2,63}$/.test(normalized)) return undefined;
-  return normalized;
-}
-
-function resolveMachineId(account: ResolvedTestAccount, userId: string): string {
-  const explicit = normalizeMachineId(account.config.machineId);
-  if (explicit) return explicit;
-  const source = `${hostname()}:${userId}:${account.accountId}`;
-  const digest = createHash("sha1").update(source).digest("hex").slice(0, 20);
-  return `m_${digest}`;
-}
-
-function resolveMachineLabel(account: ResolvedTestAccount, userId: string): string {
-  const configured = account.config.machineLabel?.trim();
-  if (configured) return configured.slice(0, 80);
-  return `${hostname()}:${userId}:${account.accountId}`.slice(0, 80);
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
-}
-
-function normalizeModeMapFromResponse(value: unknown): Record<string, string> | undefined {
-  const source = asRecord(value);
-  if (!source) return undefined;
-  const next: Record<string, string> = {};
-  for (const [rawMode, rawTarget] of Object.entries(source)) {
-    const modeId = rawMode.trim().toLowerCase();
-    if (!/^[a-z0-9_-]{1,32}$/.test(modeId)) continue;
-    const target = typeof rawTarget === "string" ? rawTarget.trim().toLowerCase() : "";
-    if (!/^[a-z0-9_-]{1,64}$/.test(target)) continue;
-    next[modeId] = target;
-  }
-  return Object.keys(next).length > 0 ? next : undefined;
-}
-
-function normalizeModeHintMapFromResponse(
-  value: unknown,
-  maxLength: number,
-): Record<string, string> | undefined {
-  const source = asRecord(value);
-  if (!source) return undefined;
-  const next: Record<string, string> = {};
-  for (const [rawMode, rawHint] of Object.entries(source)) {
-    const modeId = rawMode.trim().toLowerCase();
-    if (!/^[a-z0-9_-]{1,32}$/.test(modeId)) continue;
-    const hint = typeof rawHint === "string" ? rawHint.trim() : "";
-    if (!hint) continue;
-    next[modeId] = hint.slice(0, maxLength);
-  }
-  return Object.keys(next).length > 0 ? next : undefined;
-}
-
-function normalizeMinimaxEndpointFromResponse(value: unknown): "global" | "cn" | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "global") return "global";
-  if (normalized === "cn") return "cn";
-  return undefined;
-}
-
-function normalizeMinimaxModelIdFromResponse(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim();
-  if (!normalized) return undefined;
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(normalized)) return undefined;
-  return normalized;
-}
-
-function normalizeMinimaxApiKeyFromResponse(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim();
-  if (!normalized) return undefined;
-  if (normalized.length > 512) return undefined;
-  return normalized;
-}
-
-function parseProviderSyncFromResponse(value: unknown): RegisteredMachineProfile["providerSync"] {
-  const source = asRecord(value);
-  if (!source) return undefined;
-  const minimaxSource = asRecord(source.minimax);
-  if (!minimaxSource) return undefined;
-  const endpoint = normalizeMinimaxEndpointFromResponse(minimaxSource.endpoint);
-  const modelId = normalizeMinimaxModelIdFromResponse(minimaxSource.modelId);
-  const apiKey = normalizeMinimaxApiKeyFromResponse(minimaxSource.apiKey);
-  if (!apiKey) return undefined;
-  return {
-    minimax: {
-      endpoint,
-      modelId,
-      apiKey,
-    },
-  };
-}
-
-function parseRegisteredMachineProfile(payload: unknown): RegisteredMachineProfile | null {
-  const root = asRecord(payload);
-  const machine = asRecord(root?.machine);
-  const config = asRecord(root?.config);
-  const routing = asRecord(config?.routing);
-  const providerSync = parseProviderSyncFromResponse(config?.providerSync);
-  const machineIdRaw = machine?.machineId;
-  const machineId = typeof machineIdRaw === "string" ? normalizeMachineId(machineIdRaw) : undefined;
-  if (!machineId) return null;
-  const parsedRouting =
-    routing
-      ? {
-          modeAccountMap: normalizeModeMapFromResponse(routing.modeAccountMap),
-          modeModelHints: normalizeModeHintMapFromResponse(routing.modeModelHints, 120),
-          modeAgentHints: normalizeModeHintMapFromResponse(routing.modeAgentHints, 120),
-          modeSkillsHints: normalizeModeHintMapFromResponse(routing.modeSkillsHints, 160),
-        }
-      : undefined;
-  const updatedAt = typeof machine.updatedAt === "number" ? machine.updatedAt : undefined;
-  const lastSeenAt = typeof machine.lastSeenAt === "number" ? machine.lastSeenAt : undefined;
-  return {
-    machineId,
-    routing: parsedRouting,
-    providerSync,
-    updatedAt,
-    lastSeenAt,
-  };
-}
-
-async function runOpenclawCommand(args: string[]): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn("openclaw", args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: process.env,
-    });
-    let stderr = "";
-    child.stderr.on("data", (chunk: Buffer | string) => {
-      if (stderr.length > 4000) return;
-      stderr += String(chunk);
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      const detail = stderr.trim();
-      reject(new Error(detail || `openclaw ${args.join(" ")} exited with code ${String(code ?? "?")}`));
-    });
-  });
-}
-
-function resolveMinimaxProviderId(endpoint: "global" | "cn"): string {
-  return endpoint === "cn" ? "minimax-cn" : "minimax";
-}
-
-function resolveMinimaxBaseUrl(endpoint: "global" | "cn"): string {
-  return endpoint === "cn"
-    ? "https://api.minimaxi.com/anthropic"
-    : "https://api.minimax.io/anthropic";
-}
-
-function buildMinimaxModelsPayload(preferredModelId: string): string {
-  const ids = [preferredModelId, DEFAULT_MINIMAX_MODEL_ID, "MiniMax-M2.5-Lightning"];
-  const uniqueIds = [...new Set(ids.map((value) => value.trim()).filter(Boolean))];
-  const models = uniqueIds.map((id) => ({
-    id,
-    name: id,
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 15, output: 60, cacheRead: 2, cacheWrite: 10 },
-    contextWindow: 200000,
-    maxTokens: 8192,
-  }));
-  return JSON.stringify(models);
-}
-
-async function applyMinimaxProviderSync(params: {
-  account: ResolvedTestAccount;
-  minimax: NonNullable<RegisteredMachineProfile["providerSync"]>["minimax"];
-}): Promise<void> {
-  const apiKey = params.minimax?.apiKey?.trim();
-  if (!apiKey) return;
-  const endpoint = params.minimax.endpoint === "global" ? "global" : "cn";
-  const providerId = resolveMinimaxProviderId(endpoint);
-  const baseUrl = resolveMinimaxBaseUrl(endpoint);
-  const modelId = params.minimax.modelId?.trim() || DEFAULT_MINIMAX_MODEL_ID;
-  await runOpenclawCommand(["config", "set", "models.mode", "merge"]);
-  await runOpenclawCommand([
-    "config",
-    "set",
-    `models.providers.${providerId}.baseUrl`,
-    baseUrl,
-  ]);
-  await runOpenclawCommand([
-    "config",
-    "set",
-    `models.providers.${providerId}.api`,
-    "anthropic-messages",
-  ]);
-  await runOpenclawCommand([
-    "config",
-    "set",
-    `models.providers.${providerId}.apiKey`,
-    apiKey,
-  ]);
-  await runOpenclawCommand([
-    "config",
-    "set",
-    `models.providers.${providerId}.models`,
-    buildMinimaxModelsPayload(modelId),
-  ]);
-}
-
-function scheduleProviderSyncForProfile(params: {
-  account: ResolvedTestAccount;
-  profile: RegisteredMachineProfile;
-  runtime: { log?: (message: string) => void; error?: (message: string) => void };
-}): void {
-  const accountId = params.account.accountId;
-  const minimax = params.profile.providerSync?.minimax;
-  const apiKey = minimax?.apiKey?.trim();
-  if (!apiKey) {
-    providerSyncFingerprint.delete(accountId);
-    return;
-  }
-  const endpoint = minimax.endpoint === "global" ? "global" : "cn";
-  const modelId = minimax.modelId?.trim() || DEFAULT_MINIMAX_MODEL_ID;
-  const fingerprint = `${endpoint}:${modelId}:${apiKey}`;
-  if (providerSyncFingerprint.get(accountId) === fingerprint) {
-    return;
-  }
-  if (providerSyncInFlight.has(accountId)) {
-    return;
-  }
-  const task =
-    (async () => {
-      try {
-        await applyMinimaxProviderSync({ account: params.account, minimax });
-        providerSyncFingerprint.set(accountId, fingerprint);
-        params.runtime.log?.(
-          `vimalinx provider sync applied for ${accountId}: minimax endpoint=${endpoint} model=${modelId}`,
-        );
-      } catch (err) {
-        params.runtime.error?.(`vimalinx provider sync failed for ${accountId}: ${String(err)}`);
-      }
-    })().finally(() => {
-      providerSyncInFlight.delete(accountId);
-    });
-  providerSyncInFlight.set(accountId, task);
-}
-
-async function callMachineEndpoint(params: {
-  account: ResolvedTestAccount;
-  path: string;
-  body: Record<string, unknown>;
-  security: ReturnType<typeof resolveTestSecurityConfig>;
-  abortSignal: AbortSignal;
-}): Promise<unknown> {
-  const baseUrl = params.account.baseUrl;
-  if (!baseUrl) throw new Error("baseUrl is not configured");
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  const token = params.account.token ?? params.account.webhookToken;
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const body = JSON.stringify(params.body);
-  if (params.security.signOutbound && params.security.hmacSecret) {
-    const timestamp = Date.now();
-    const nonce = generateNonce();
-    const signature = createTestSignature({
-      secret: params.security.hmacSecret,
-      timestamp,
-      nonce,
-      body,
-    });
-    headers["x-vimalinx-timestamp"] = String(timestamp);
-    headers["x-vimalinx-nonce"] = nonce;
-    headers["x-vimalinx-signature"] = signature;
-  }
-  const response = await fetch(buildMachineApiUrl(baseUrl, params.path), {
-    method: "POST",
-    headers,
-    body,
-    signal: params.abortSignal,
-  });
-  const parsed = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = asRecord(parsed)?.error;
-    const message = typeof error === "string" && error ? error : `HTTP ${response.status}`;
-    throw new Error(message);
-  }
-  return parsed;
 }
 
 function delay(ms: number): Promise<void> {
@@ -485,14 +165,6 @@ function parseInboundMessage(payload: TestInboundPayload): TestInboundMessage | 
   const mentioned = typeof source.mentioned === "boolean" ? source.mentioned : undefined;
   const timestamp = typeof source.timestamp === "number" ? source.timestamp : undefined;
   const id = typeof source.id === "string" ? source.id.trim() : undefined;
-  const modeId =
-    typeof source.modeId === "string" && source.modeId.trim()
-      ? source.modeId.trim().toLowerCase()
-      : undefined;
-  const modeLabel = typeof source.modeLabel === "string" ? source.modeLabel.trim() : undefined;
-  const modelHint = typeof source.modelHint === "string" ? source.modelHint.trim() : undefined;
-  const agentHint = typeof source.agentHint === "string" ? source.agentHint.trim() : undefined;
-  const skillsHint = typeof source.skillsHint === "string" ? source.skillsHint.trim() : undefined;
 
   return {
     id,
@@ -504,11 +176,6 @@ function parseInboundMessage(payload: TestInboundPayload): TestInboundMessage | 
     text,
     mentioned,
     timestamp,
-    modeId,
-    modeLabel,
-    modelHint,
-    agentHint,
-    skillsHint,
   };
 }
 
@@ -649,95 +316,6 @@ async function startTestPoller(params: {
   return () => {
     stopped = true;
   };
-}
-
-async function registerMachineForAccount(params: {
-  account: ResolvedTestAccount;
-  runtime: { log?: (message: string) => void; error?: (message: string) => void };
-  abortSignal: AbortSignal;
-}): Promise<RegisteredMachineProfile | null> {
-  if (!shouldAutoRegisterMachine(params.account)) return null;
-  if (!params.account.baseUrl) return null;
-  const token = params.account.token ?? params.account.webhookToken;
-  if (!token) return null;
-
-  const userId = resolveUserId(params.account);
-  const machineId = resolveMachineId(params.account, userId);
-  const security = resolveTestSecurityConfig(params.account.config.security);
-  try {
-    const payload = await callMachineEndpoint({
-      account: params.account,
-      path: "api/machine/register",
-      body: {
-        userId,
-        token,
-        machineId,
-        accountId: params.account.accountId,
-        machineLabel: resolveMachineLabel(params.account, userId),
-        hostName: hostname(),
-        platform: process.platform,
-        arch: process.arch,
-        runtimeVersion: process.version,
-      },
-      security,
-      abortSignal: params.abortSignal,
-    });
-    const profile = parseRegisteredMachineProfile(payload);
-    if (!profile) {
-      params.runtime.error?.(`vimalinx machine register failed for ${params.account.accountId}: invalid response`);
-      return null;
-    }
-    setRegisteredMachineProfile(params.account.accountId, profile);
-    scheduleProviderSyncForProfile({
-      account: params.account,
-      profile,
-      runtime: params.runtime,
-    });
-    params.runtime.log?.(`vimalinx machine registered: ${profile.machineId}`);
-    return profile;
-  } catch (err) {
-    params.runtime.error?.(`vimalinx machine register failed for ${params.account.accountId}: ${String(err)}`);
-    return null;
-  }
-}
-
-async function heartbeatMachineForAccount(params: {
-  account: ResolvedTestAccount;
-  machineId: string;
-  runtime: { log?: (message: string) => void; error?: (message: string) => void };
-  abortSignal: AbortSignal;
-  status?: "online" | "offline";
-}): Promise<void> {
-  if (!params.account.baseUrl) return;
-  const token = params.account.token ?? params.account.webhookToken;
-  if (!token) return;
-  const userId = resolveUserId(params.account);
-  const security = resolveTestSecurityConfig(params.account.config.security);
-  try {
-    const payload = await callMachineEndpoint({
-      account: params.account,
-      path: "api/machine/heartbeat",
-      body: {
-        userId,
-        token,
-        machineId: params.machineId,
-        status: params.status,
-      },
-      security,
-      abortSignal: params.abortSignal,
-    });
-    const profile = parseRegisteredMachineProfile(payload);
-    if (profile) {
-      setRegisteredMachineProfile(params.account.accountId, profile);
-      scheduleProviderSyncForProfile({
-        account: params.account,
-        profile,
-        runtime: params.runtime,
-      });
-    }
-  } catch (err) {
-    params.runtime.error?.(`vimalinx machine heartbeat failed for ${params.account.accountId}: ${String(err)}`);
-  }
 }
 
 export async function handleTestWebhookRequest(
@@ -940,59 +518,18 @@ export async function startTestMonitor(params: {
   inboundMode?: "webhook" | "poll";
   statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
 }): Promise<() => void> {
-  clearRegisteredMachineProfile(params.account.accountId);
-  const profile = await registerMachineForAccount({
+  const mode = normalizeInboundMode(params.inboundMode ?? params.account.config.inboundMode);
+  if (mode === "poll") {
+    return await startTestPoller(params);
+  }
+  const path = params.account.webhookPath ?? DEFAULT_WEBHOOK_PATH;
+  return registerTestWebhookTarget({
     account: params.account,
+    config: params.config,
     runtime: params.runtime,
     abortSignal: params.abortSignal,
+    statusSink: params.statusSink,
+    path,
+    expectedToken: params.account.webhookToken ?? params.account.token,
   });
-
-  let stopHeartbeat = () => {};
-  if (profile?.machineId) {
-    const heartbeatMs = resolveMachineHeartbeatMs(params.account);
-    const timer = setInterval(() => {
-      if (params.abortSignal.aborted) return;
-      void heartbeatMachineForAccount({
-        account: params.account,
-        machineId: profile.machineId,
-        runtime: params.runtime,
-        abortSignal: params.abortSignal,
-      });
-    }, heartbeatMs);
-    stopHeartbeat = () => clearInterval(timer);
-  }
-
-  const mode = normalizeInboundMode(params.inboundMode ?? params.account.config.inboundMode);
-  let stopTransport: (() => void) | undefined;
-  if (mode === "poll") {
-    stopTransport = await startTestPoller(params);
-  } else {
-    const path = params.account.webhookPath ?? DEFAULT_WEBHOOK_PATH;
-    stopTransport = registerTestWebhookTarget({
-      account: params.account,
-      config: params.config,
-      runtime: params.runtime,
-      abortSignal: params.abortSignal,
-      statusSink: params.statusSink,
-      path,
-      expectedToken: params.account.webhookToken ?? params.account.token,
-    });
-  }
-
-  return () => {
-    stopHeartbeat();
-    stopTransport?.();
-    if (profile?.machineId) {
-      const abort = new AbortController();
-      const timeout = setTimeout(() => abort.abort(), 3000);
-      void heartbeatMachineForAccount({
-        account: params.account,
-        machineId: profile.machineId,
-        runtime: params.runtime,
-        abortSignal: abort.signal,
-        status: "offline",
-      }).finally(() => clearTimeout(timeout));
-    }
-    clearRegisteredMachineProfile(params.account.accountId);
-  };
 }
