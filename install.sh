@@ -73,7 +73,7 @@ if [[ -z "${VIMALINX_INBOUND_MODE:-}" && -n "${existing_inbound_mode}" ]]; then
   INBOUND_MODE="${existing_inbound_mode}"
 fi
 
-echo "Installing Vimalinx Server plugin to: ${TARGET_DIR}"
+echo "Installing ClawNet Server plugin to: ${TARGET_DIR}"
 for legacy_dir in "${LEGACY_DIRS[@]}"; do
   if [[ -d "${legacy_dir}" && "${legacy_dir}" != "${TARGET_DIR}" ]]; then
     rm -rf "${legacy_dir}"
@@ -100,9 +100,9 @@ fi
 openclaw plugins install "${TARGET_DIR}" >/dev/null 2>&1 || true
 openclaw plugins enable vimalinx >/dev/null 2>&1 || true
 
-server_url_default="${existing_server_url:-$DEFAULT_SERVER_URL}"
+server_url_default="${SERVER_URL:-$DEFAULT_SERVER_URL}"
 if [[ -t 0 ]]; then
-  read -r -p "Vimalinx Server URL [${server_url_default}]: " SERVER_URL
+  read -r -p "ClawNet Server URL [${server_url_default}]: " SERVER_URL
 else
   SERVER_URL="${SERVER_URL:-$server_url_default}"
 fi
@@ -113,7 +113,7 @@ fi
 SERVER_URL="${SERVER_URL%/}"
 
 if [[ -t 0 ]]; then
-  read -r -s -p "Vimalinx token (leave blank to keep existing): " TOKEN
+  read -r -s -p "ClawNet token (leave blank to keep existing): " TOKEN
   echo
   if [[ -z "${TOKEN}" ]]; then
     TOKEN="${existing_token}" 
@@ -122,7 +122,7 @@ fi
 TOKEN="${TOKEN:-$existing_token}"
 TOKEN="$(printf "%s" "${TOKEN}" | tr -d '\r\n' | xargs)"
 if [[ -z "${TOKEN}" ]]; then
-  echo "Missing Vimalinx token." >&2
+  echo "Missing ClawNet token." >&2
   exit 1
 fi
 
